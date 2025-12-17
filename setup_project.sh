@@ -3,7 +3,8 @@
 # Nome do projeto
 PROJECT_NAME="card-system-api"
 PACKAGE_PATH="src/main/java/com/fabiano/cardsystem"
-HOST_NAME="vmlinuxd"
+#HOST_NAME="vmlinuxd"
+HOST_NAME="localhost"
 
 # 1. Garante que estamos na raiz do projeto (sem duplicar)
 CURRENT_DIR_NAME=$(basename "$PWD")
@@ -138,6 +139,20 @@ cat <<EOF > pom.xml
       <artifactId>mysql-connector-j</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>runtime</scope>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -210,7 +225,56 @@ public class GlobalExceptionHandler {
     }
 }
 EOF
+mkdir -p src/test/java/com/fabiano/cardsystem/domain/model
+cat <<EOF > src/test/java/com/fabiano/cardsystem/domain/model/TransactionTest.java
+package com.fabiano.cardsystem.domain.model;
 
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class TransactionTest {
+    @Test
+    void testTransactionCreation() {
+        Transaction t = new Transaction();
+        assertNotNull(t);
+    }
+}
+EOF
+
+mkdir -p src/main/java/com/fabiano/cardsystem/adapter/in/web
+cat <<EOF > src/main/java/com/fabiano/cardsystem/adapter/in/web/TransactionController.java
+package com.fabiano.cardsystem.adapter.in.web;
+
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1/transactions")
+public class TransactionController {
+
+    @PostMapping
+    public ResponseEntity<?> process(@RequestBody Map<String, Object> request) {
+        Double amount = Double.valueOf(request.get("amount").toString());
+        
+        // Lógica sugerida na vaga: Análise de limites
+        if (amount > 10000) {
+            return ResponseEntity.status(422).body(Map.of(
+                "status", "REJECTED",
+                "reason", "Transaction exceeds safety limit",
+                "transactionId", UUID.randomUUID().toString()
+            ));
+        }
+        
+        return ResponseEntity.ok(Map.of(
+            "status", "APPROVED",
+            "transactionId", UUID.randomUUID().toString(),
+            "message", "Processed by F1RST Architecture"
+        ));
+    }
+}
+EOF
 # 5. Criar o Dockerfile
 cat <<EOF > Dockerfile
 FROM amazoncorretto:11-alpine
@@ -257,6 +321,8 @@ mvn clean compile
 mvn clean package -DskipTests
 docker build -t card-system-api:1.0 .
 #docker run --rm card-system-api:1.0 java -version
+docker stop santander-api || true && docker rm santander-api || true
 docker run -d -p 8080:8080 --name santander-api card-system-api:1.0
+sleep 10
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'

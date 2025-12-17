@@ -3,12 +3,24 @@
 # Nome do projeto
 PROJECT_NAME="card-system-api"
 PACKAGE_PATH="src/main/java/com/fabiano/cardsystem"
+HOST_NAME="vmlinuxd"
+
+# 1. Garante que estamos na raiz do projeto (sem duplicar)
+CURRENT_DIR_NAME=$(basename "$PWD")
+
+if [ "$CURRENT_DIR_NAME" == "$PROJECT_NAME" ]; then
+    echo "📍 Você já está na pasta '$PROJECT_NAME'. Criando estrutura aqui..."
+else
+    echo "📂 Criando pasta '$PROJECT_NAME' e entrando nela..."
+    mkdir -p "$PROJECT_NAME"
+    cd "$PROJECT_NAME" || exit
+fi
 
 echo "🚀 Iniciando criação do projeto $PROJECT_NAME..."
 
-# 1. Criar estrutura de pastas (Arquitetura Hexagonal)
-mkdir -p $PROJECT_NAME/$PACKAGE_PATH/{domain/model,application/service,application/ports/out,adapter/in/web,adapter/out/db}
-mkdir -p $PROJECT_NAME/src/main/resources
+# 1. Criar estrutura de pastas (REMOVIDO o $PROJECT_NAME do caminho inicial)
+mkdir -p "$PACKAGE_PATH"/{domain/model,application/service,application/ports/out,adapter/in/web,adapter/out/db}
+mkdir -p src/main/resources
 
 
 cat <<EOF > README.md
@@ -58,14 +70,14 @@ docker run -d -p 8080:8080 --name santander-api card-system-api:1.0
 
 **Aprovação de Transação (Valor < 10.000):**
 \`\`\`bash
-curl -X POST http://localhost:8080/api/v1/transactions \\
+curl -X POST http://$HOST_NAME:8080/api/v1/transactions \\
 -H "Content-Type: application/json" \\
 -d '{"cardNumber": "1234-5678", "amount": 500.00}'
 \`\`\`
 
 **Rejeição de Transação (Valor > 10.000):**
 \`\`\`bash
-curl -X POST http://localhost:8080/api/v1/transactions \\
+curl -X POST http://$HOST_NAME:8080/api/v1/transactions \\
 -H "Content-Type: application/json" \\
 -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
 \`\`\`
@@ -244,7 +256,7 @@ cd card-system-api
 mvn clean compile
 mvn clean package -DskipTests
 docker build -t card-system-api:1.0 .
-docker run --rm card-system-api:1.0 java -version
+#docker run --rm card-system-api:1.0 java -version
 docker run -d -p 8080:8080 --name santander-api card-system-api:1.0
-curl -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
-#curl -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
+curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
+curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'

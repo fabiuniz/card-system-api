@@ -1,45 +1,41 @@
 flowchart LR
-    T["Projeto Card System API: Arquitetura e Entrega Nível III"]
+    T["**Projeto Card System API**<br/>Arquitetura e Entrega Nível III"]
     
-    %% Conexão inicial
     T --> Fase1
 
-    subgraph Fase1 ["Fase 1: Core Domain"]
+    subgraph Fase1 ["**Fase 1: Core Domain**"]
         direction TB
-        A[💎 Regras de Negócio: Aprovação vs Rejeição] 
-        B[🔒 Domínio Isolado: Sem Dependência de Frameworks]
-        C[🧪 Testes Unitários: Validação Crítica da Lógica]
+        A["💎 **Business Rules**:<br/>Validação de Limite R$ 10k"] 
+        B["🔒 **Domain Isolation**:<br/>POJOs sem Framework Leak"]
+        C["🧪 **Unit Testing**:<br/>JUnit 5 & AssertJ"]
         A --> B --> C
     end
 
-    subgraph Fase2 ["Fase 2: Adapters e Infraestrutura"]
+    subgraph Fase2 ["**Fase 2: Adapters & Documentation**"]
         direction TB
-        D[🌐 API REST: Mapeamento de Endpoints v1]
-        E[💾 Persistência: JPA / Hibernate / MySQL]
-        F[🛠️ Global Handler: Padronização de Erros e Segurança]
+        D["🌐 **REST API**:<br/>Spring Boot 2.7"]
+        E["📖 **Swagger/OpenAPI**:<br/>Docs Interativas v3"]
+        F["🛡️ **Resilience**:<br/>Global Exception Handler"]
         D --> E --> F
     end
     
-    subgraph Fase3 ["Fase 3: Deployment e DevOps"]
+    subgraph Fase3 ["**Fase 3: Cloud & SRE**"]
         direction TB
-        G[🐳 Docker: Containerização com Amazon Corretto]
-        H[🚢 Troubleshooting: Validação de Logs e Redes]
-        I[🚀 GitHub: Documentação com Tags e Path Hooks]
+        G["🐳 **Dockerization**:<br/>Amazon Corretto 11 Alpine"]
+        H["📊 **Observability**:<br/>UUID Trace & Logs"]
+        I["🚀 **GitOps**:<br/>Semantic Versioning & Hooks"]
         G --> H --> I
     end
 
-    %% A MÁGICA: Conectamos as Subgraphs entre si, não os nós internos
-    %% Isso mantém o alinhamento LR (colunas)
     Fase1 --> Fase2
     Fase2 --> Fase3
     
-    %% Estilos de nós
-    style T fill:#F0F8FF,stroke:#333,stroke-width:2px,color:black
-    style A fill:#FB6C10,stroke:#333,stroke-width:2px
-    style B fill:#FD7000,stroke:#333,stroke-width:2px
-    style I fill:#0FA9A0,stroke:#333,stroke-width:2px
+    style T fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    style A fill:#fb6c10,stroke:#333,color:#fff
+    style E fill:#85ea2d,stroke:#333,color:#000
+    style G fill:#005f73,stroke:#333,color:#fff
+    style I fill:#0fa9a0,stroke:#333,color:#fff
     
-    %% Estilos de colunas
-    style Fase1 fill:#fff,stroke:#ffcccb,stroke-width:2px
-    style Fase2 fill:#fff,stroke:#ccffcc,stroke-width:2px
-    style Fase3 fill:#fff,stroke:#ccccff,stroke-width:2px
+    style Fase1 fill:#fff5f5,stroke:#ff8c8c,stroke-width:2px
+    style Fase2 fill:#f5fff5,stroke:#8cff8c,stroke-width:2px
+    style Fase3 fill:#f5f5ff,stroke:#8c8cff,stroke-width:2px

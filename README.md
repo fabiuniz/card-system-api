@@ -18,6 +18,8 @@ Este projeto é um Microserviço focado no processamento de transações de cart
 - **JUnit 5**: Para testes unitários de regras críticas.
 - **Docker**: Containerização com imagem **Amazon Corretto 11** para ambiente Cloud-Ready.
 - **Maven**: Gerenciamento de dependências e build.
+- **Cloud Friendly**: Containerização otimizada com Amazon Corretto para deploy imediato em ambientes AWS, Azure ou Kubernetes.
+- **OpenAPI/Swagger**: Documentação interativa integrada para facilitar o consumo por times de Frontend e Integração.
 
 ## 🏗️ Arquitetura
 O projeto utiliza **Arquitetura Hexagonal** para isolar o domínio das tecnologias externas (bancos de dados, frameworks, APIs externas). 

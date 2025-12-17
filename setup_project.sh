@@ -5,6 +5,8 @@ PROJECT_NAME="card-system-api"
 PACKAGE_PATH="src/main/java/com/fabiano/cardsystem"
 #HOST_NAME="vmlinuxd"
 HOST_NAME="localhost"
+EMAIL="fabiuniz@msn.com"
+NOME="Fabiano"
 
 # 1. Garante que estamos na raiz do projeto (sem duplicar)
 CURRENT_DIR_NAME=$(basename "$PWD")
@@ -153,6 +155,11 @@ cat <<EOF > pom.xml
       <artifactId>h2</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-ui</artifactId>
+      <version>1.6.14</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -168,18 +175,25 @@ EOF
 # 3. Criar a Classe de Domínio (Pure Java)
 cat <<EOF > $PACKAGE_PATH/domain/model/Transaction.java
 package com.fabiano.cardsystem.domain.model;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 
 public class Transaction {
-    private Long id;
+    @Schema(example = "1234-5678-9012-3456")
     private String cardNumber;
+    
+    @Schema(example = "500.00")
     private BigDecimal amount;
+    
+    private Long id;
     private String status;
 
     public Transaction() {}
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public BigDecimal getAmount() { return amount; }
+    public String getCardNumber() { return cardNumber; }
 }
 EOF
 
@@ -245,8 +259,11 @@ mkdir -p src/main/java/com/fabiano/cardsystem/adapter/in/web
 cat <<EOF > src/main/java/com/fabiano/cardsystem/adapter/in/web/TransactionController.java
 package com.fabiano.cardsystem.adapter.in.web;
 
+import com.fabiano.cardsystem.domain.model.Transaction;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.Map;
 import java.util.UUID;
 
@@ -254,23 +271,30 @@ import java.util.UUID;
 @RequestMapping("/api/v1/transactions")
 public class TransactionController {
 
+    @Operation(summary = "Processa transação", description = "Valida limite de segurança de R$ 10.000")
+    @ApiResponse(responseCode = "200", description = "Aprovada")
+    @ApiResponse(responseCode = "422", description = "Negada por limite")
     @PostMapping
-    public ResponseEntity<?> process(@RequestBody Map<String, Object> request) {
-        Double amount = Double.valueOf(request.get("amount").toString());
+    public ResponseEntity<?> process(@RequestBody Transaction transaction) {
+        // Agora o Swagger reconhece os campos de Transaction!
         
-        // Lógica sugerida na vaga: Análise de limites
+        if (transaction.getAmount() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Amount is required"));
+        }
+
+        double amount = transaction.getAmount().doubleValue();
+        
         if (amount > 10000) {
             return ResponseEntity.status(422).body(Map.of(
                 "status", "REJECTED",
-                "reason", "Transaction exceeds safety limit",
+                "reason", "Limit exceeded",
                 "transactionId", UUID.randomUUID().toString()
             ));
         }
         
         return ResponseEntity.ok(Map.of(
             "status", "APPROVED",
-            "transactionId", UUID.randomUUID().toString(),
-            "message", "Processed by F1RST Architecture"
+            "transactionId", UUID.randomUUID().toString()
         ));
     }
 }

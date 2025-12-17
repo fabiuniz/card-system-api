@@ -3,8 +3,8 @@
 # Nome do projeto
 PROJECT_NAME="card-system-api"
 PACKAGE_PATH="src/main/java/com/fabiano/cardsystem"
-#HOST_NAME="vmlinuxd"
-HOST_NAME="localhost"
+HOST_NAME="vmlinuxd"
+#HOST_NAME="localhost"
 EMAIL="fabiuniz@msn.com"
 NOME="Fabiano"
 
@@ -299,6 +299,66 @@ public class TransactionController {
     }
 }
 EOF
+
+
+mkdir -p .github/workflows
+cat <<'EOF' > .github/workflows/deploy.yml
+name: CI/CD Santander F1RST
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  REPO_NAME: santander-repo
+  IMAGE_NAME: card-system-api
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    # Define o diretório de trabalho para que o GitHub saiba que os comandos devem rodar dentro da pasta da API
+    defaults:
+      run:
+        working-directory: ./card-system-api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+
+      - name: Google Auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Docker Auth
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build and Push Container
+        run: |
+          docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        uses: 'google-github-actions/deploy-cloudrun@v2'
+        with:
+          service: ${{ env.IMAGE_NAME }}
+          image: us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          region: ${{ env.REGION }}
+          flags: '--allow-unauthenticated'
+EOF
+
 # 5. Criar o Dockerfile
 cat <<EOF > Dockerfile
 FROM amazoncorretto:11-alpine
@@ -309,7 +369,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 EOF
 
 # 6. Inicializar Git e Primeiro Commit
-echo "📦 Inicializando repositório Git..."
+#echo "📦 Inicializando repositório Git..."
 git init
 cat <<EOF > .gitignore
 target/
@@ -319,8 +379,8 @@ target/
 .DS_Store
 EOF
 
-git add .
-git commit -m "feat: initial structure with hexagonal architecture, java 11 and docker"
+#git add .
+#git commit -m "feat: initial structure with hexagonal architecture, java 11 and docker"
 
 echo "✅ Projeto '$PROJECT_NAME' criado com sucesso e commit realizado!"
 echo "👉 Para rodar: cd $PROJECT_NAME && ./mvnw spring-boot:run (se tiver o maven wrapper)"
@@ -350,3 +410,12 @@ docker run -d -p 8080:8080 --name santander-api card-system-api:1.0
 sleep 10
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
+
+echo "--------------------------"
+# Define a cor azul sublinhado
+BLUE_UNDERLINE='\e[4;34m'
+NC='\e[0m' # No Color (reseta a cor)
+echo -e "\n--- LINKS DA APLICAÇÃO Clique no link (Segure CTRL + Clique): ---"
+echo -e "API Base:   ${BLUE_UNDERLINE}http://$HOST_NAME:8080${NC}"
+echo -e "Swagger UI: ${BLUE_UNDERLINE}http://$HOST_NAME:8080/swagger-ui/index.html${NC}"
+echo "--------------------------"

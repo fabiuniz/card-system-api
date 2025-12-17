@@ -20,6 +20,8 @@ Este projeto é um Microserviço focado no processamento de transações de cart
 - **Maven**: Gerenciamento de dependências e build.
 - **Cloud Friendly**: Containerização otimizada com Amazon Corretto para deploy imediato em ambientes AWS, Azure ou Kubernetes.
 - **OpenAPI/Swagger**: Documentação interativa integrada para facilitar o consumo por times de Frontend e Integração.
+- **GitHub Actions**: Esteira de CI/CD totalmente automatizada.
+- **Google Cloud Platform (GCP)**: Infraestrutura de hospedagem via Cloud Run (Serverless). 
 
 ## 🏗️ Arquitetura
 O projeto utiliza **Arquitetura Hexagonal** para isolar o domínio das tecnologias externas (bancos de dados, frameworks, APIs externas). 
@@ -73,4 +75,99 @@ curl -X POST http://localhost:8080/api/v1/transactions \
 - **Cloud Friendly**: Configuração preparada para ambientes AWS/Azure via Docker.
 
 ---
-**Desenvolvido por Fabiano - Candidato Analista III**
+
+## 🏗️ Arquitetura e CI/CD
+O projeto segue os princípios de **Clean Architecture** e utiliza uma esteira automatizada para deploy. 
+
+
+
+### Pipeline de Entrega Continua:
+1. **Build**: Compilação via Maven no GitHub Runner.
+2. **Containerize**: Criação da imagem Docker e push para o **GCP Artifact Registry**.
+3. **Deploy**: Atualização automática do serviço no **GCP Cloud Run**.
+
+---
+
+## ☁️ Implantação no Google Cloud (GCP)
+
+Para replicar o ambiente de produção, siga os passos abaixo utilizando o `gcloud CLI`:
+
+### ⚙ 1. Configuração de Acesso (Service Account)
+```bash
+# 1. Definir a variável corretamente (sem espaços)
+export PROJECT_ID="santander-repo"
+
+# 2. Ativar a API do Artifact Registry (isso só funcionará após o Billing ser vinculado)
+gcloud services enable artifactregistry.googleapis.com --project=$PROJECT_ID
+gcloud services enable run.googleapis.com --project=santander-repo
+
+# 3. Criar a Service Account (se der erro de 'already exists', pode ignorar)
+gcloud iam service-accounts create github-deploy-sa || echo "Conta já existe"
+
+# 4. Atribuir permissões usando a variável $PROJECT_ID
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/artifactregistry.writer"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/iam.serviceAccountUser"
+
+# 5. Gerar a chave JSON
+gcloud iam service-accounts keys create gcp-key.json \
+    --iam-account=github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com
+
+# Garante que você está no projeto correto
+gcloud config set project $PROJECT_ID
+
+# Habilita a API do Artifact Registry
+gcloud services enable artifactregistry.googleapis.com
+
+gcloud artifacts repositories create $PROJECT_ID \
+    --repository-format=docker \
+    --location=us-central1 \
+    --description="Repositorio Docker para o Santander F1RST"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/artifactregistry.writer"if [[ condition ]]; then
+    	#statements
+    fi    
+
+cat gcp-key.json    
+gcloud config get-value project
+```
+### ⚙ 2. Configuração de Secrets no GitHub
+
+Copie todo o texto que aparecer (começa com { e termina com }).
+Não cole essa chave diretamente no seu código! 
+Ela deve ser guardada nos Secrets do seu repositório para ficar protegida:
+
+Acesse o seu repositório no GitHub.
+
+Vá na aba Settings (Configurações).
+
+No menu lateral esquerdo, clique em Secrets and variables > Actions.
+
+- **Clique em secret  and variables.**
+
+**Aba: Secrets (Botão "New repository secret")**
+```bash
+Name: GCP_SA_KEY
+Value: (Cole todo o conteúdo do arquivo gcp-key.json)
+```
+
+**Aba: Variables (Botão "New repository variable")**
+```bash
+Name: GCP_PROJECT_ID
+Value: santander-repo
+```
+
+```bash
+    GCP_PROJECT_ID: "O ID do seu projeto no Google Cloud."
+    GCP_SA_KEY: "O conteúdo completo do arquivo gcp-key.json gerado no passo anterior.""
+```

@@ -1,11 +1,13 @@
 <!-- 
   Tags: DevOps,Iac
-  Label: ⚙️ Card System API - Santander/F1RST Challenge
+  Label: 💳 Card System API - Santander/F1RST Challenge
   Description:⭐ Microserviço focado no processamento de transações de cartões
   technical_requirement: Java 11, Spring Boot 2.7, Spring Data JPA, Hibernate, MySQL, Docker, Maven, JUnit 5, Hexagonal Architecture, SOLID, Clean Architecture, REST API, Global Exception Handling, Bean Validation, Bash Scripting, Linux (Debian), Git, GitFlow, Amazon Corretto, Multi-stage builds, CI/CD, GitHub Actions, SRE, Troubleshooting, Cloud Computing.
   path_hook: hookfigma.hook18,hookfigma.hook20
 -->
-# Card System API - Santander/F1RST Challenge
+# 💳 Card System API - Santander/F1RST Challenge
+
+![Fluxo do Sistema](images/fluxo.png)
 
 Este projeto é um Microserviço focado no processamento de transações de cartões, desenvolvido como parte do processo seletivo para a posição de **Analista de Sistemas III**.
 

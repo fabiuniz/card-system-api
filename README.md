@@ -171,3 +171,11 @@ Value: santander-repo
     GCP_PROJECT_ID: "O ID do seu projeto no Google Cloud."
     GCP_SA_KEY: "O conteúdo completo do arquivo gcp-key.json gerado no passo anterior.""
 ```
+
+### 🚀 3. Testando a implantação da aplicação
+
+Para visualizar a aplicação em execução, acesse o Cloud Run no console do Google Cloud e localize o serviço santander-repo.
+
+A documentação interativa das APIs (Swagger) está disponível no endpoint final da URL gerada.
+
+Exemplo de link para acesso: 🔗 https://8080xxxxxxxxxxxxxxxxxxx.run.app/swagger

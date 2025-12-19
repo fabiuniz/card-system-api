@@ -178,4 +178,39 @@ Para visualizar a aplicação em execução, acesse o Cloud Run no console do Go
 
 A documentação interativa das APIs (Swagger) está disponível no endpoint final da URL gerada.
 
-Exemplo de link para acesso: 🔗 https://8080xxxxxxxxxxxxxxxxxxx.run.app/swagger
+Exemplo de link para acesso: 🔗 https://8080xxxxxxxxxxxxxxxxxxx.run.app/swagger-ui.html
+
+
+### 🚀 4. Terraform a implantação da aplicação
+
+1. O que você precisa fazer agora (Manual e Único)
+Acesse o Console da GCP > IAM & Admin > IAM e localize a conta github-deploy-sa@santander-repo.iam.gserviceaccount.com. Adicione as seguintes permissões (Roles) a ela:
+
+Editor: (Para criar e deletar recursos como Cloud Run e Buckets).
+
+Service Usage Admin: (Esta é a que falta para o comando gcloud services enable funcionar).
+
+Project IAM Admin: (Para o Terraform conseguir liberar o acesso público ao Cloud Run).
+
+
+OU
+```bash
+# Detecta automaticamente o projeto atual do Cloud Shell
+export PROJECT_ID=$(gcloud config get-value project)
+export SA_EMAIL="github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com"
+
+# 1. Dar permissão de Editor
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/editor"
+
+# 2. Dar permissão de Service Usage Admin
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/serviceusage.serviceUsageAdmin"
+
+# 3. Dar permissão de IAM Admin
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/resourcemanager.projectIamAdmin"
+```

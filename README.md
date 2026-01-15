@@ -265,3 +265,9 @@ O ambiente já está pré-configurado com **Dashboards as Code**.
 Ao acessar o Grafana, você encontrará dois ambientes prontos:
 1. **Santander Card System - Overview**: Dashboard de negócio (Aprovações vs Rejeições) com limites de alerta AIOps.
 2. **JVM Micrometer**: Dashboard técnico (Health-check profundo) com métricas de Memória Heap, CPU, Threads e Garbage Collector. 
+
+### 🚀 terraform
+No seu terminal, dentro da pasta terraform:
+Inicializar: terraform init
+Validar: terraform plan -var="project_id=santander-repo"
+Provisionar: terraform apply -var="project_id=santander-repo"

@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: santander-card-api
+  labels:
+    app: card-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: card-api
+  template:
+    metadata:
+      labels:
+        app: card-api
+    spec:
+      containers:
+      - name: card-api
+        image: gcr.io/santander-repo/card-system-api:1.0
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        # Garante que o tráfego só chegue quando a JVM subir
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        # Reinicia o container se a aplicação travar
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20

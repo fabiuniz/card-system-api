@@ -60,6 +60,7 @@ curl -s https://grafana.com/api/dashboards/4701/revisions/10/download > monitori
 # Garante que qualquer referência de datasource aponte para o seu UID "prometheus"
 sed -i 's/\${DS_PROMETHEUS}/prometheus/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
 sed -i 's/"datasource": ".*"/"datasource": "prometheus"/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
+sed -i 's/"from": "now-24h"/"from": "now-1m"/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
 
 cat <<EOF > monitoring/prometheus/prometheus.yml
 global:
@@ -125,7 +126,7 @@ cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.js
       "type": "bargauge"
     }
   ],
-  "schemaVersion": 37, "style": "dark", "tags": ["santander", "aiops"], "templating": { "list": [] }, "time": { "from": "now-15m", "to": "now" }, "timepicker": {}, "timezone": "", "title": "Santander Card System - Overview", "version": 1
+  "schemaVersion": 37, "style": "dark", "tags": ["santander", "aiops"], "templating": { "list": [] }, "time": { "from": "now-1m", "to": "now" }, "timepicker": {}, "timezone": "", "title": "Santander Card System - Overview", "version": 1
 }
 EOF
 
@@ -425,10 +426,6 @@ cat <<EOF > pom.xml
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
@@ -721,5 +718,5 @@ echo -e "Swagger UI: ${BLUE_UNDERLINE}http://$HOST_NAME:8080/swagger-ui/index.ht
 echo -e "Prometheus: ${BLUE_UNDERLINE}http://$HOST_NAME:9090/targets${NC}"
 echo -e "Grafana: ${BLUE_UNDERLINE}http://$HOST_NAME:3000 (Login: admin / Senha: admin${NC}"
 echo -e "Actuator: ${RED_UNDERLINE}curl http://$HOST_NAME:8080/actuator/prometheus${NC}"
-echo -e "Python: ${RED_UNDERLINE}run python3 scripts/aiops_health_agent.py${NC}"
+echo -e "Python: ${RED_UNDERLINE}python3 scripts/aiops_health_agent.py${NC}"
 echo "--------------------------"

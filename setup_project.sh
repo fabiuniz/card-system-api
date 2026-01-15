@@ -27,6 +27,39 @@ mkdir -p scripts
 mkdir -p src/main/resources
 mkdir -p "$PACKAGE_PATH"/{application/service,domain/model,adapter/in/web}
 mkdir -p monitoring/prometheus
+mkdir -p monitoring/grafana/provisioning/datasources
+mkdir -p monitoring/grafana/provisioning/dashboards
+
+cat <<EOF > monitoring/grafana/provisioning/datasources/datasource.yml
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+EOF
+
+cat <<EOF > monitoring/grafana/provisioning/dashboards/dashboard_config.yml
+apiVersion: 1
+providers:
+  - name: 'Default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+EOF
+
+# Baixa o dashboard padrão da JVM (ID 4701)
+curl -s https://grafana.com/api/dashboards/4701/revisions/10/download > monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
+
+# Garante que qualquer referência de datasource aponte para o seu UID "prometheus"
+sed -i 's/\${DS_PROMETHEUS}/prometheus/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
+sed -i 's/"datasource": ".*"/"datasource": "prometheus"/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
 
 cat <<EOF > monitoring/prometheus/prometheus.yml
 global:
@@ -41,7 +74,6 @@ EOF
 
 cat <<EOF > monitoring/docker-compose.yml
 version: "3"
-
 services:
   prometheus:
     image: prom/prometheus
@@ -58,8 +90,43 @@ services:
     container_name: grafana
     ports:
       - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+EOF
+
+cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.json
+{
+  "annotations": { "list": [ { "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard" } ] },
+  "editable": true, "fiscalYearStartMonth": 0, "graphTooltip": 0, "id": null, "links": [], "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 10 } ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "pluginVersion": "9.3.6",
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(transactions_total) by (status)", "legendFormat": "{{status}}", "range": true, "refId": "A" }
+      ],
+      "title": "Monitoramento de Transações AIOps",
+      "type": "bargauge"
+    }
+  ],
+  "schemaVersion": 37, "style": "dark", "tags": ["santander", "aiops"], "templating": { "list": [] }, "time": { "from": "now-15m", "to": "now" }, "timepicker": {}, "timezone": "", "title": "Santander Card System - Overview", "version": 1
+}
 EOF
 
 cat <<EOF > README.md

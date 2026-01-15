@@ -254,3 +254,14 @@ for i in {1..50}; do
   sleep 0.5
 done
 ```
+
+### 📊 Observabilidade Automática (IaC)
+O ambiente já está pré-configurado com **Dashboards as Code**.
+1. Acesse `http://vmlinuxd:3000` (admin/admin).
+2. Vá em **Dashboards** e abra o item **"Santander Card System - Overview"**.
+3. Os dados das transações aparecerão automaticamente conforme o uso da API.
+
+### 📊 Dashboards Disponíveis (Auto-Provisioned)
+Ao acessar o Grafana, você encontrará dois ambientes prontos:
+1. **Santander Card System - Overview**: Dashboard de negócio (Aprovações vs Rejeições) com limites de alerta AIOps.
+2. **JVM Micrometer**: Dashboard técnico (Health-check profundo) com métricas de Memória Heap, CPU, Threads e Garbage Collector. 

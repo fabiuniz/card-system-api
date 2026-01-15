@@ -208,11 +208,16 @@ Após subir o container, você pode validar a telemetria que alimenta nossa IA:
 
 **1. Ver métricas brutas (Prometheus format):**
 \`\`\`bash
-curl http://localhost:8080/actuator/prometheus
+curl http://$HOST_NAME:8080/actuator/prometheus
 \`\`\`
 
 # O agente analisa o status e transações em tempo real
 \`\`\`bash
+# 1. 🐍 Preparar Python (AIOps Agent)
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install requests
 python3 scripts/aiops_health_agent.py
 \`\`\`
 
@@ -314,7 +319,7 @@ cat <<EOF > scripts/aiops_health_agent.py
 import requests
 
 def analyze_health():
-    url = "http://localhost:8080/actuator/prometheus"
+    url = "http://$HOST_NAME:8080/actuator/prometheus"
     try:
         response = requests.get(url)
         lines = response.text.split('\n')
@@ -703,6 +708,12 @@ cd ..
 
 echo "✅ Stack de Observabilidade está online!"
 
+# Preparar Python (AIOps Agent)
+echo "🐍 Configurando ambiente Python isolado..."
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install requests
 python3 scripts/aiops_health_agent.py
 
 echo "✅ Testes de metricas realizado!"

@@ -48,4 +48,5 @@ jobs:
           service: ${{ env.IMAGE_NAME }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
-          flags: '--allow-unauthenticated'
+          #flags: '--allow-unauthenticated'
+          flags: '--memory=256Mi --cpu=1 --max-instances=3'

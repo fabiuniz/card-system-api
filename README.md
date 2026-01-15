@@ -1,15 +1,22 @@
 <!-- 
   Tags: DevOps,Iac
-  Label: 💳 Card System API - Santander/F1RST Challenge
+  Label: 💳 Card System Platform - Santander/F1RST Evolution
   Description:⭐ Microserviço focado no processamento de transações de cartões
   technical_requirement: Java 11, Spring Boot 2.7, Spring Data JPA, Hibernate, MySQL, Docker, Maven, JUnit 5, Hexagonal Architecture, SOLID, Clean Architecture, REST API, Global Exception Handling, Bean Validation, Bash Scripting, Linux (Debian), Git, GitFlow, Amazon Corretto, Multi-stage builds, CI/CD, GitHub Actions, SRE, Troubleshooting, Cloud Computing.
   path_hook: hookfigma.hook18,hookfigma.hook20
 -->
-# 💳 Card System API - Santander/F1RST Challenge
+# 💳 Card System Platform - Santander/F1RST Evolution
 
 ![Fluxo do Sistema](images/fluxo.png)
 
 Este projeto é um Microserviço focado no processamento de transações de cartões, desenvolvido como parte do processo seletivo para a posição de **Analista de Sistemas III**.
+
+## 🌟 Specialist Evolution (Vaga Atual: Especialista AIOps)
+Diferente da versão inicial de Analista III, esta branch introduz conceitos avançados de **SRE** e **AIOps**, elevando a maturidade do microserviço:
+
+- **Observabilidade Full-Stack**: Implementação de métricas customizadas via **Micrometer** e exposição de telemetria via **Spring Actuator**.
+- **Python AIOps Agent**: Script lateral (`/scripts`) que consome dados de saúde da API para automação de incidentes.
+- **FinOps Ready**: Configuração de limites de recursos (CPU/MEM) no CI/CD para otimização de custos no GCP Cloud Run.
 
 ## 🚀 Tecnologias e Frameworks
 - **Java 11**: Linguagem base para conformidade com o ecossistema atual.
@@ -37,6 +44,15 @@ O projeto utiliza **Arquitetura Hexagonal** para isolar o domínio das tecnologi
 ### Pré-requisitos
 - Docker instalado.
 - Maven 3.8+ (opcional se usar Docker).
+
+### preparação: Maven
+```bash
+apt-get update && apt-get install maven -y
+apt-get update && apt-get install docker.io -y
+systemctl start docker
+systemctl enable docker
+usermod -aG docker $USER
+```
 
 ### Passo 1: Build da aplicação
 ```bash
@@ -67,6 +83,18 @@ curl -X POST http://localhost:8080/api/v1/transactions \
 curl -X POST http://localhost:8080/api/v1/transactions \
 -H "Content-Type: application/json" \
 -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
+```
+### 🤖 Validando a Camada de AIOps
+Após subir o container, você pode validar a telemetria que alimenta nossa IA:
+
+**1. Ver métricas brutas (Prometheus format):**
+```bash
+curl http://localhost:8080/actuator/prometheus
+```
+
+# O agente analisa o status e transações em tempo real
+```bash
+python3 scripts/aiops_health_agent.py
 ```
 
 ## 🛡️ Diferenciais Implementados

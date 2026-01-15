@@ -279,3 +279,8 @@ No seu terminal, dentro da pasta terraform:
 Inicializar: terraform init
 Validar: terraform plan -var="project_id=santander-repo"
 Provisionar: terraform apply -var="project_id=santander-repo"
+
+### 🛠️ Metodologia e Uso de IA
+Este projeto foi desenvolvido utilizando uma abordagem de Engenharia Aumentada por IA.
+
+"Embora tenha utilizado ferramentas de Inteligência Artificial para acelerar a implementação de determinados módulos e scripts, detenho o domínio da Arquitetura de Referência e dos conceitos fundamentais de SRE/AIOps. Isso me permite manter o controle técnico total da solução, realizar 'deep dives' em qualquer componente conforme a necessidade e garantir que a automação sirva aos objetivos de negócio de forma produtiva e segura."

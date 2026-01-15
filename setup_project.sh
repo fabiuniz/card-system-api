@@ -164,36 +164,45 @@ cat <<EOF > $PACKAGE_PATH/adapter/in/web/TransactionController.java
 package com.fabiano.cardsystem.adapter.in.web;
 import com.fabiano.cardsystem.domain.model.Transaction;
 import com.fabiano.cardsystem.application.service.TransactionMetrics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.Map;
 import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/transactions")
-@PostMapping
-public ResponseEntity<?> process(@RequestBody Transaction t) {
-    // 1. Log de Auditoria: Apenas avisa que a requisição chegou.
-    log.info("EVENT=TX_RECEIVE | CARD_PREFIX={}", t.getCardNumber().substring(0,4));
-    // 2. Validação de Regra de Negócio
-    if (t.getAmount().doubleValue() > 10000) {
-        // Incrementa APENAS a métrica de erro/rejeição
-        metrics.incrementRejected(); 
-        log.warn("EVENT=TX_REJECT | REASON=LIMIT_EXCEEDED | AMOUNT={}", t.getAmount());        
-        return ResponseEntity.status(422).body(Map.of(
-            "status", "REJECTED",
-            "reason", "Limit exceeded"
+public class TransactionController {
+    private final TransactionMetrics metrics;
+    // O Spring injeta automaticamente as métricas aqui
+    public TransactionController(TransactionMetrics metrics) {
+        this.metrics = metrics;
+    }
+    @Operation(summary = "Processa transação", description = "Valida limite de segurança de R$ 10.000")
+    @ApiResponse(responseCode = "200", description = "Aprovada")
+    @ApiResponse(responseCode = "422", description = "Negada por limite")
+    @PostMapping
+    public ResponseEntity<?> process(@RequestBody Transaction transaction) {
+        if (transaction.getAmount() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Amount is required"));
+        }
+        double amount = transaction.getAmount().doubleValue();
+        
+        if (amount > 10000) {
+            // AQUI É ONDE O AIOPS GANHA VIDA
+            metrics.incrementRejected(); 
+            return ResponseEntity.status(422).body(Map.of(
+                "status", "REJECTED",
+                "reason", "Limit exceeded",
+                "transactionId", UUID.randomUUID().toString()
+            ));
+        }
+        metrics.incrementApproved();
+        return ResponseEntity.ok(Map.of(
+            "status", "APPROVED",
+            "transactionId", UUID.randomUUID().toString()
         ));
     }
-    // 3. Sucesso: Só chega aqui se passar no IF acima
-    // Agora sim, incrementamos a métrica de aprovação
-    metrics.incrementApproved(); 
-    log.info("EVENT=TX_SUCCESS | STATUS=APPROVED");
-    return ResponseEntity.ok(Map.of(
-        "status", "APPROVED", 
-        "id", UUID.randomUUID().toString()
-    ));
 }
 EOF
 
@@ -417,40 +426,32 @@ EOF
 mkdir -p src/main/java/com/fabiano/cardsystem/adapter/in/web
 cat <<EOF > src/main/java/com/fabiano/cardsystem/adapter/in/web/TransactionController.java
 package com.fabiano.cardsystem.adapter.in.web;
-
 import com.fabiano.cardsystem.domain.model.Transaction;
+import com.fabiano.cardsystem.application.service.TransactionMetrics;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.Map;
 import java.util.UUID;
-
 @RestController
 @RequestMapping("/api/v1/transactions")
 public class TransactionController {
-
-    @Operation(summary = "Processa transação", description = "Valida limite de segurança de R$ 10.000")
-    @ApiResponse(responseCode = "200", description = "Aprovada")
-    @ApiResponse(responseCode = "422", description = "Negada por limite")
+    private final TransactionMetrics metrics;
+    public TransactionController(TransactionMetrics metrics) {
+        this.metrics = metrics;
+    }
     @PostMapping
     public ResponseEntity<?> process(@RequestBody Transaction transaction) {
-        // Agora o Swagger reconhece os campos de Transaction!
-        
         if (transaction.getAmount() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Amount is required"));
         }
-
-        double amount = transaction.getAmount().doubleValue();
-        
-        if (amount > 10000) {
+        if (transaction.getAmount().doubleValue() > 10000) {
+            metrics.incrementRejected();
             return ResponseEntity.status(422).body(Map.of(
                 "status", "REJECTED",
-                "reason", "Limit exceeded",
                 "transactionId", UUID.randomUUID().toString()
             ));
         }
-        
+        metrics.incrementApproved();
         return ResponseEntity.ok(Map.of(
             "status", "APPROVED",
             "transactionId", UUID.randomUUID().toString()

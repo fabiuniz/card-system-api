@@ -23,13 +23,28 @@ echo "🚀 Iniciando criação do projeto $PROJECT_NAME..."
 
 # 1. Criar estrutura de pastas (REMOVIDO o $PROJECT_NAME do caminho inicial)
 mkdir -p "$PACKAGE_PATH"/{domain/model,application/service,application/ports/out,adapter/in/web,adapter/out/db}
+mkdir -p scripts
 mkdir -p src/main/resources
-
+mkdir -p "$PACKAGE_PATH"/{application/service,domain/model,adapter/in/web}
 
 cat <<EOF > README.md
-# Card System API - Santander/F1RST Challenge
+<!-- 
+  Tags: DevOps,Iac
+  Label: 💳 Card System Platform - Santander/F1RST Evolution
+  Description:⭐ Microserviço focado no processamento de transações de cartões
+  technical_requirement: Java 11, Spring Boot 2.7, Spring Data JPA, Hibernate, MySQL, Docker, Maven, JUnit 5, Hexagonal Architecture, SOLID, Clean Architecture, REST API, Global Exception Handling, Bean Validation, Bash Scripting, Linux (Debian), Git, GitFlow, Amazon Corretto, Multi-stage builds, CI/CD, GitHub Actions, SRE, Troubleshooting, Cloud Computing.
+  path_hook: hookfigma.hook18,hookfigma.hook20
+-->
+# 💳 Card System Platform - Santander/F1RST Evolution
 
 Este projeto é um Microserviço focado no processamento de transações de cartões, desenvolvido como parte do processo seletivo para a posição de **Analista de Sistemas III**.
+
+## 🌟 Specialist Evolution (Vaga Atual: Especialista AIOps)
+Diferente da versão inicial de Analista III, esta branch introduz conceitos avançados de **SRE** e **AIOps**, elevando a maturidade do microserviço:
+
+- **Observabilidade Full-Stack**: Implementação de métricas customizadas via **Micrometer** e exposição de telemetria via **Spring Actuator**.
+- **Python AIOps Agent**: Script lateral (`/scripts`) que consome dados de saúde da API para automação de incidentes.
+- **FinOps Ready**: Configuração de limites de recursos (CPU/MEM) no CI/CD para otimização de custos no GCP Cloud Run.
 
 ## 🚀 Tecnologias e Frameworks
 - **Java 11**: Linguagem base para conformidade com o ecossistema atual.
@@ -85,6 +100,19 @@ curl -X POST http://$HOST_NAME:8080/api/v1/transactions \\
 -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
 \`\`\`
 
+### 🤖 Validando a Camada de AIOps
+Após subir o container, você pode validar a telemetria que alimenta nossa IA:
+
+**1. Ver métricas brutas (Prometheus format):**
+\`\`\`bash
+curl http://localhost:8080/actuator/prometheus
+\`\`\`
+
+# O agente analisa o status e transações em tempo real
+\`\`\`bash
+python3 scripts/aiops_health_agent.py
+\`\`\`
+
 ## 🛡️ Diferenciais Implementados
 - **Global Exception Handler**: Padronização de erros JSON para conformidade com gateways de API.
 - **Troubleshooting Ready**: Logs estruturados para facilitar a análise em ambientes produtivos.
@@ -96,6 +124,129 @@ EOF
 
 cd $PROJECT_NAME
 
+# --- CONFIGURAÇÃO ACTUATOR (application.yml) ---
+cat <<EOF > src/main/resources/application.yml
+spring:
+  application:
+    name: card-system-platform
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,metrics,prometheus"
+  endpoint:
+    health:
+      show-details: always
+EOF
+
+# --- TRANSACTION METRICS (Coração do AIOps) ---
+cat <<EOF > $PACKAGE_PATH/application/service/TransactionMetrics.java
+package com.fabiano.cardsystem.application.service;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.stereotype.Service;
+
+@Service
+public class TransactionMetrics {
+    private final Counter approved;
+    private final Counter rejected;
+    public TransactionMetrics(MeterRegistry registry) {
+        this.approved = Counter.builder("transactions_total").tag("status", "approved").register(registry);
+        this.rejected = Counter.builder("transactions_total").tag("status", "rejected").register(registry);
+    }
+    public void incrementApproved() { approved.increment(); }
+    public void incrementRejected() { rejected.increment(); }
+}
+EOF
+
+# --- TRANSACTION CONTROLLER (Com Logs e Métricas) ---
+cat <<EOF > $PACKAGE_PATH/adapter/in/web/TransactionController.java
+package com.fabiano.cardsystem.adapter.in.web;
+import com.fabiano.cardsystem.domain.model.Transaction;
+import com.fabiano.cardsystem.application.service.TransactionMetrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import java.util.Map;
+import java.util.UUID;
+@RestController
+@RequestMapping("/api/v1/transactions")
+@PostMapping
+public ResponseEntity<?> process(@RequestBody Transaction t) {
+    // 1. Log de Auditoria: Apenas avisa que a requisição chegou.
+    log.info("EVENT=TX_RECEIVE | CARD_PREFIX={}", t.getCardNumber().substring(0,4));
+    // 2. Validação de Regra de Negócio
+    if (t.getAmount().doubleValue() > 10000) {
+        // Incrementa APENAS a métrica de erro/rejeição
+        metrics.incrementRejected(); 
+        log.warn("EVENT=TX_REJECT | REASON=LIMIT_EXCEEDED | AMOUNT={}", t.getAmount());        
+        return ResponseEntity.status(422).body(Map.of(
+            "status", "REJECTED",
+            "reason", "Limit exceeded"
+        ));
+    }
+    // 3. Sucesso: Só chega aqui se passar no IF acima
+    // Agora sim, incrementamos a métrica de aprovação
+    metrics.incrementApproved(); 
+    log.info("EVENT=TX_SUCCESS | STATUS=APPROVED");
+    return ResponseEntity.ok(Map.of(
+        "status", "APPROVED", 
+        "id", UUID.randomUUID().toString()
+    ));
+}
+EOF
+
+# --- AGENTE PYTHON (AIOps Agent) ---
+cat <<EOF > scripts/aiops_health_agent.py
+import requests
+import time
+
+def check():
+    try:
+        h = requests.get("http://localhost:8080/actuator/health").json()
+        m = requests.get("http://localhost:8080/actuator/metrics/transactions_total").json()
+        val = m['measurements'][0]['value']
+        print(f"✅ AIOps Agent | Status: {h['status']} | Total TX: {val}")
+    except:
+        print("🚨 API Offline ou sem métricas ainda.")
+
+if __name__ == "__main__":
+    check()
+EOF
+
+chmod +x scripts/aiops_health_agent.py
+# --- VALIDAÇÃO DE FERRAMENTAS (MAVEN & DOCKER) ---
+echo "🔍 Validando pré-requisitos do ambiente..."
+
+# Validação do Maven
+if ! command -v mvn &> /dev/null; then
+    echo "⚠️ MAVEN: Não encontrado. Instalando..."
+    apt-get update && apt-get install maven -y
+else
+    echo "✅ MAVEN: Detectado ($(mvn -version | head -n 1))"
+fi
+
+# Validação do Docker
+if ! command -v docker &> /dev/null; then
+    echo "⚠️ DOCKER: Não encontrado. Instalando..."
+    apt-get update && apt-get install docker.io -y
+    systemctl start docker
+    systemctl enable docker
+    usermod -aG docker $USER
+    echo "🚀 Docker instalado. Nota: Pode ser necessário relogar para aplicar permissões de grupo."
+else
+    # Verifica se o daemon do Docker está rodando
+    if ! docker ps &> /dev/null; then
+        echo "🚨 DOCKER: Comando existe, mas o serviço está parado ou sem permissão (."
+        systemctl start docker
+    else
+        echo "✅ DOCKER: Detectado e operacional."
+    fi
+fi
+echo "✅ Adaptação do sistema com Monitoramento Inteligente. concluída!"
+
+#
 cat <<EOF > src/main/java/com/fabiano/cardsystem/CardSystemApplication.java
 package com.fabiano.cardsystem;
 
@@ -159,6 +310,14 @@ cat <<EOF > pom.xml
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-ui</artifactId>
       <version>1.6.14</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
     </dependency>
   </dependencies>
   <build>
@@ -418,4 +577,5 @@ NC='\e[0m' # No Color (reseta a cor)
 echo -e "\n--- LINKS DA APLICAÇÃO Clique no link (Segure CTRL + Clique): ---"
 echo -e "API Base:   ${BLUE_UNDERLINE}http://$HOST_NAME:8080${NC}"
 echo -e "Swagger UI: ${BLUE_UNDERLINE}http://$HOST_NAME:8080/swagger-ui/index.html${NC}"
+echo -e "Prometheus: ${BLUE_UNDERLINE}curl http://$HOST_NAME:8080/actuator/prometheus${NC}"
 echo "--------------------------"

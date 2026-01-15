@@ -26,6 +26,41 @@ mkdir -p "$PACKAGE_PATH"/{domain/model,application/service,application/ports/out
 mkdir -p scripts
 mkdir -p src/main/resources
 mkdir -p "$PACKAGE_PATH"/{application/service,domain/model,adapter/in/web}
+mkdir -p monitoring/prometheus
+
+cat <<EOF > monitoring/prometheus/prometheus.yml
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'card-system-api'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8080'] # Se rodar API no host e Prom no Docker
+EOF
+
+cat <<EOF > monitoring/docker-compose.yml
+version: "3"
+
+services:
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+EOF
 
 cat <<EOF > README.md
 <!-- 
@@ -209,19 +244,39 @@ EOF
 # --- AGENTE PYTHON (AIOps Agent) ---
 cat <<EOF > scripts/aiops_health_agent.py
 import requests
-import time
 
-def check():
+def analyze_health():
+    url = "http://localhost:8080/actuator/prometheus"
     try:
-        h = requests.get("http://localhost:8080/actuator/health").json()
-        m = requests.get("http://localhost:8080/actuator/metrics/transactions_total").json()
-        val = m['measurements'][0]['value']
-        print(f"✅ AIOps Agent | Status: {h['status']} | Total TX: {val}")
-    except:
-        print("🚨 API Offline ou sem métricas ainda.")
+        response = requests.get(url)
+        lines = response.text.split('\n')
+        
+        approved = 0
+        rejected = 0
+        
+        for line in lines:
+            if 'transactions_total{status="approved",}' in line:
+                approved = float(line.split()[-1])
+            if 'transactions_total{status="rejected",}' in line:
+                rejected = float(line.split()[-1])
+        
+        total = approved + rejected
+        rejection_rate = (rejected / total * 100) if total > 0 else 0
+        
+        print(f"📊 --- AIOps Health Report ---")
+        print(f"✅ Approved: {approved} | ❌ Rejected: {rejected}")
+        print(f"📈 Rejection Rate: {rejection_rate:.2f}%")
+        
+        if rejection_rate > 40:
+            print("🚨 ALERT: High rejection rate detected! Check fraud system.")
+        else:
+            print("🟢 System Status: HEALTHY")
+            
+    except Exception as e:
+        print(f"🚨 Error connecting to API: {e}")
 
 if __name__ == "__main__":
-    check()
+    analyze_health()
 EOF
 
 chmod +x scripts/aiops_health_agent.py
@@ -571,12 +626,33 @@ sleep 10
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
 
+# --- INICIALIZAÇÃO DO STACK DE MONITORAMENTO ---
+echo "📊 Subindo Prometheus e Grafana..."
+
+# Entra na pasta de monitoramento e sobe os containers via docker-compose
+cd monitoring
+docker-compose down || true # Garante que não haja conflitos de execuções anteriores
+docker-compose up -d
+
+# Volta para a raiz do projeto
+cd ..
+
+echo "✅ Stack de Observabilidade está online!"
+
+python3 scripts/aiops_health_agent.py
+
+echo "✅ Testes de metricas realizado!"
+
 echo "--------------------------"
 # Define a cor azul sublinhado
 BLUE_UNDERLINE='\e[4;34m'
+RED_UNDERLINE='\e[4;31m'
 NC='\e[0m' # No Color (reseta a cor)
 echo -e "\n--- LINKS DA APLICAÇÃO Clique no link (Segure CTRL + Clique): ---"
 echo -e "API Base:   ${BLUE_UNDERLINE}http://$HOST_NAME:8080${NC}"
 echo -e "Swagger UI: ${BLUE_UNDERLINE}http://$HOST_NAME:8080/swagger-ui/index.html${NC}"
-echo -e "Prometheus: ${BLUE_UNDERLINE}curl http://$HOST_NAME:8080/actuator/prometheus${NC}"
+echo -e "Prometheus: ${BLUE_UNDERLINE}http://$HOST_NAME:9090/targets${NC}"
+echo -e "Grafana: ${BLUE_UNDERLINE}http://$HOST_NAME:3000 (Login: admin / Senha: admin${NC}"
+echo -e "Actuator: ${RED_UNDERLINE}curl http://$HOST_NAME:8080/actuator/prometheus${NC}"
+echo -e "Python: ${RED_UNDERLINE}run python3 scripts/aiops_health_agent.py${NC}"
 echo "--------------------------"

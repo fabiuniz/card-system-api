@@ -207,3 +207,50 @@ Para visualizar a aplicação em execução, acesse o Cloud Run no console do Go
 A documentação interativa das APIs (Swagger) está disponível no endpoint final da URL gerada.
 
 Exemplo de link para acesso: 🔗 https://8080xxxxxxxxxxxxxxxxxxx.run.app/swagger
+
+## 📊 Guia de Configuração do Dashboard de Observabilidade
+
+Siga os passos abaixo para conectar os dados da API ao Grafana e visualizar a saúde do sistema.
+
+### 1. Acesso ao Grafana
+* **URL:** `http://vmlinuxd:3000`
+* **Credenciais:** Usuário `admin` | Senha `admin`
+
+### 2. Configurar Fonte de Dados (Prometheus)
+O Grafana precisa "ler" o banco de dados do Prometheus:
+1. No menu lateral, clique em **Connections** > **Data Sources**.
+2. Clique em **Add data source** e selecione **Prometheus**.
+3. No campo **URL**, digite: `http://prometheus:9090`
+4. Role até o fim e clique em **Save & Test**. (Deve aparecer uma confirmação verde).
+
+### 3. Criar Painel de Transações (Business Metrics)
+Para ver o volume de Aprovações vs. Rejeições:
+1. No menu lateral, clique em **Dashboards** > **New** > **Add Visualization**.
+2. Selecione o Data Source **Prometheus**.
+3. No campo de busca **Query**, insira:
+   ```promql
+   sum(transactions_total) by (status)
+   ```
+4. No canto direito, em Panel options, altere o título para `Status de Transações (Tempo Real)`.
+5. Em Library panels > Suggestions, escolha o formato Bar Gauge ou Pie Chart.
+6. Clique em Apply no topo superior direito.
+
+### 4. Importar Dashboard Completo de SRE (JVM)
+Para monitorar CPU, Memória Heap e Threads automaticamente:
+1. No menu lateral, clique em Dashboards > New > Import.
+2. No campo Import via grafana.com, digite o ID: 4701 (é o ID oficial de um template na galeria pública do Grafana.com) e clique em Load.   
+3. Na próxima tela, selecione o Data Source Prometheus no seletor de baixo.
+4. Clique em Import.
+
+### 🛠️ Gerar Massa de Dados para Teste
+Caso o gráfico esteja vazio, execute o comando abaixo no terminal para simular 50 transações e popular os gráficos instantaneamente:
+
+```promql
+
+for i in {1..50}; do 
+  curl -s -X POST http://vmlinuxd:8080/api/v1/transactions \
+  -H "Content-Type: application/json" \
+  -d "{\"cardNumber\": \"1234\", \"amount\": \$((RANDOM % 15000))}" > /dev/null
+  sleep 0.5
+done
+```

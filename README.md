@@ -11,13 +11,21 @@
 
 Este projeto é um Microserviço focado no processamento de transações de cartões, desenvolvido como parte do processo seletivo para a posição de **Analista de Sistemas III**.
 
+## 📖 Storytelling: A Jornada da Resiliência
+Imagine uma **Black Friday** no ecossistema **Santander**. Milhares de transações por segundo cruzam a rede. Neste cenário, uma falha não é apenas um erro de log; é um cliente impossibilitado de comprar. 
+
+Este projeto nasceu para transcender o desenvolvimento tradicional. Não entregamos apenas código; entregamos **Disponibilidade**. Através da **Arquitetura Hexagonal**, isolamos o core bancário de instabilidades externas. Com o **HPA (Horizontal Pod Autoscaler)**, nossa infraestrutura "respira" conforme a demanda, e através de um **Agente AIOps em Python**, detectamos anomalias antes que elas afetem o cliente final. É a engenharia de software aliada à inteligência operacional para garantir um sistema que nunca dorme.
+
+---
+
 ## 🌟 Specialist Evolution (Vaga Atual: Especialista AIOps)
 Diferente da versão inicial de Analista III, esta branch introduz conceitos avançados de **SRE** e **AIOps**, elevando a maturidade do microserviço:
 
 - **Observabilidade Full-Stack**: Implementação de métricas customizadas via **Micrometer** e exposição de telemetria via **Spring Actuator**.
 - **Python AIOps Agent**: Script lateral (`/scripts`) que consome dados de saúde da API para automação de incidentes.
 - **FinOps Ready**: Configuração de limites de recursos (CPU/MEM) no CI/CD para otimização de custos no GCP Cloud Run.
-
+- **Resiliência Nativa**: Implementação de *Liveness* e *Readiness Probes* para garantir o Self-healing do container.
+ 
 ## 🚀 Tecnologias e Frameworks
 - **Java 11**: Linguagem base para conformidade com o ecossistema atual.
 - **Spring Boot 2.7**: Framework para agilidade no desenvolvimento de microserviços.

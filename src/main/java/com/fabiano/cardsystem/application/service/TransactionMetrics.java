@@ -1,26 +1,16 @@
 package com.fabiano.cardsystem.application.service;
-
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TransactionMetrics {
-    private final Counter approvedCounter;
-    private final Counter rejectedCounter;
-
+    private final Counter approved;
+    private final Counter rejected;
     public TransactionMetrics(MeterRegistry registry) {
-        this.approvedCounter = Counter.builder("transactions_total")
-                .tag("status", "approved")
-                .description("Total de transações aprovadas")
-                .register(registry);
-
-        this.rejectedCounter = Counter.builder("transactions_total")
-                .tag("status", "rejected")
-                .description("Total de transações negadas por limite")
-                .register(registry);
+        this.approved = Counter.builder("transactions_total").tag("status", "approved").register(registry);
+        this.rejected = Counter.builder("transactions_total").tag("status", "rejected").register(registry);
     }
-
-    public void incrementApproved() { approvedCounter.increment(); }
-    public void incrementRejected() { rejectedCounter.increment(); }
+    public void incrementApproved() { approved.increment(); }
+    public void incrementRejected() { rejected.increment(); }
 }

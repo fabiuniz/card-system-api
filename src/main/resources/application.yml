@@ -1,16 +1,11 @@
 spring:
   application:
     name: card-system-platform
-
-# Configurações do Actuator para AIOps
 management:
   endpoints:
     web:
       exposure:
-        include: "health,metrics,prometheus" # Expõe os dados para o Python e Prometheus
+        include: "health,metrics,prometheus"
   endpoint:
     health:
-      show-details: always # Mostra detalhes extras de disco e banco no health check
-  metrics:
-    tags:
-      application: ${spring.application.name}
+      show-details: always

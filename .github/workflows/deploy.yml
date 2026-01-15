@@ -3,10 +3,9 @@ name: CI/CD Santander F1RST
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Permite rodar manualmente pelo site do GitHub
 
 env:
-  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
   REPO_NAME: santander-repo
   IMAGE_NAME: card-system-api
@@ -14,6 +13,10 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # Define o diretório de trabalho para que o GitHub saiba que os comandos devem rodar dentro da pasta da API
+    defaults:
+      run:
+        working-directory: ./card-system-api
 
     steps:
       - name: Checkout
@@ -39,14 +42,13 @@ jobs:
 
       - name: Build and Push Container
         run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Deploy to Cloud Run
         uses: 'google-github-actions/deploy-cloudrun@v2'
         with:
           service: ${{ env.IMAGE_NAME }}
-          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          image: us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
-          #flags: '--allow-unauthenticated'
-          flags: '--memory=256Mi --cpu=1 --max-instances=3'
+          flags: '--allow-unauthenticated'

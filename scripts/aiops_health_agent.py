@@ -1,31 +1,34 @@
 import requests
-import time
 
-# Configurações
-BASE_URL = "http://localhost:8080/actuator"
-HEALTH_URL = f"{BASE_URL}/health"
-METRICS_URL = f"{BASE_URL}/metrics/transactions_total"
-
-def run_aiops_check():
-    print("🚀 [F1RST AIOps] Iniciando monitoramento inteligente...")
-    
+def analyze_health():
+    url = "http://localhost:8080/actuator/prometheus"
     try:
-        # 1. Check de Saúde Básico
-        health = requests.get(HEALTH_URL, timeout=5).json()
-        print(f"📊 Status do Sistema: {health['status']}")
-
-        # 2. Check de Métricas de Negócio (Onde a mágica acontece)
-        metrics_resp = requests.get(METRICS_URL, timeout=5)
+        response = requests.get(url)
+        lines = response.text.split('\n')
         
-        if metrics_resp.status_code == 200:
-            measurements = metrics_resp.json().get('measurements', [])
-            total_tx = measurements[0]['value'] if measurements else 0
-            print(f"📈 Telemetria: {total_tx} transações processadas desde o último boot.")
+        approved = 0
+        rejected = 0
+        
+        for line in lines:
+            if 'transactions_total{status="approved",}' in line:
+                approved = float(line.split()[-1])
+            if 'transactions_total{status="rejected",}' in line:
+                rejected = float(line.split()[-1])
+        
+        total = approved + rejected
+        rejection_rate = (rejected / total * 100) if total > 0 else 0
+        
+        print(f"📊 --- AIOps Health Report ---")
+        print(f"✅ Approved: {approved} | ❌ Rejected: {rejected}")
+        print(f"📈 Rejection Rate: {rejection_rate:.2f}%")
+        
+        if rejection_rate > 40:
+            print("🚨 ALERT: High rejection rate detected! Check fraud system.")
         else:
-            print("⚠️ Métricas ainda não geradas. Processe uma transação primeiro.")
-
+            print("🟢 System Status: HEALTHY")
+            
     except Exception as e:
-        print(f"🚨 ALERTA: Falha na coleta de dados. Verifique se a API Java está UP. Erro: {e}")
+        print(f"🚨 Error connecting to API: {e}")
 
 if __name__ == "__main__":
-    run_aiops_check()
+    analyze_health()

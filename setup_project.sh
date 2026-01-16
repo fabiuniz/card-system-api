@@ -4,6 +4,8 @@
 PROJECT_NAME="card-system-api"
 PACKAGE_PATH="src/main/java/com/fabiano/cardsystem"
 HOST_NAME="vmlinuxd"
+INTERNAL_HOST="host.docker.internal"
+INTERNAL_HOST="santander-api"
 #HOST_NAME="localhost"
 EMAIL="fabiuniz@msn.com"
 NOME="Fabiano"
@@ -31,6 +33,10 @@ mkdir -p monitoring/grafana/provisioning/datasources
 mkdir -p monitoring/grafana/provisioning/dashboards
 mkdir -p .idx k8s terraform
 mkdir -p .github/workflows
+# Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
+chmod -R 777 monitoring/grafana/provisioning
+chmod -R 777 monitoring/prometheus
+chmod +x setup_iaas.sh
 
 . setup_iaas.sh
 
@@ -74,7 +80,7 @@ scrape_configs:
   - job_name: 'card-system-api'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['$HOST_NAME:8080'] # Se rodar API no host e Prom no Docker
+      - targets: ['$INTERNAL_HOST:8080'] # Se rodar API no host e Prom no Docker
 EOF
 
 cat <<EOF > monitoring/docker-compose.yml
@@ -88,23 +94,25 @@ services:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - default
 
   grafana:
     image: grafana/grafana
     container_name: grafana
+    user: "472" # ID padrão do usuário grafana para evitar conflito de permissão no volume
     ports:
       - "3000:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
       #- GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_SECURITY_CSRF_ALWAYS_CHECK=false
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/ # Importante para o Proxy do Google
 EOF
 
 cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.json
@@ -223,12 +231,20 @@ curl http://$HOST_NAME:8080/actuator/prometheus
 
 # O agente analisa o status e transações em tempo real
 \`\`\`bash
-# 1. 🐍 Preparar Python (AIOps Agent)
+echo "🐍 Configurando ambiente Python isolado..."
+# 1. Garante que estamos na raiz do projeto antes de mexer no venv
+cd "/home/userlnx/docker/script_docker/$PROJECT_NAME"
+# 2. Se houver um venv corrompido ou ativo, limpa tudo
+deactivate 2>/dev/null || true
+rm -rf venv
+# 3. Cria o venv e garante o uso do binário local para as instalações
 python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install requests
-python3 scripts/aiops_health_agent.py
+# 4. Usa o caminho direto para os binários em vez de confiar no 'source' 
+# (Isso evita erros se o bash perder a referência do PATH)
+./venv/bin/pip install --upgrade pip
+./venv/bin/pip install requests
+# 5. Executa o agente usando o python do venv recém-criado
+./venv/bin/python3 scripts/aiops_health_agent.py
 \`\`\`
 
 ## 🛡️ Diferenciais Implementados
@@ -289,6 +305,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.Map;
 import java.util.UUID;
 @RestController
+@CrossOrigin(origins = "*")
 @RequestMapping("/api/v1/transactions")
 public class TransactionController {
     private final TransactionMetrics metrics;
@@ -632,7 +649,7 @@ mvn clean package -DskipTests
 docker build -t card-system-api:1.0 .
 #docker run --rm card-system-api:1.0 java -version
 docker stop santander-api || true && docker rm santander-api || true
-docker run -d -p 8080:8080 --name santander-api card-system-api:1.0
+docker run -d -p 8080:8080 --network monitoring_default --name santander-api card-system-api:1.0
 sleep 10
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
 curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
@@ -657,11 +674,19 @@ if ! dpkg -l | grep -q "python3-venv"; then
     apt-get update && apt-get install python3-venv python3-pip -y
 fi
 echo "🐍 Configurando ambiente Python isolado..."
+# 1. Garante que estamos na raiz do projeto antes de mexer no venv
+cd "/home/userlnx/docker/script_docker/$PROJECT_NAME"
+# 2. Se houver um venv corrompido ou ativo, limpa tudo
+deactivate 2>/dev/null || true
+rm -rf venv
+# 3. Cria o venv e garante o uso do binário local para as instalações
 python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install requests
-python3 scripts/aiops_health_agent.py
+# 4. Usa o caminho direto para os binários em vez de confiar no 'source' 
+# (Isso evita erros se o bash perder a referência do PATH)
+./venv/bin/pip install --upgrade pip
+./venv/bin/pip install requests
+# 5. Executa o agente usando o python do venv recém-criado
+./venv/bin/python3 scripts/aiops_health_agent.py
 
 echo "✅ Testes de metricas realizado!"
 

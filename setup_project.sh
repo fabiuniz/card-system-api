@@ -74,7 +74,7 @@ scrape_configs:
   - job_name: 'card-system-api'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['host.docker.internal:8080'] # Se rodar API no host e Prom no Docker
+      - targets: ['$HOST_NAME:8080'] # Se rodar API no host e Prom no Docker
 EOF
 
 cat <<EOF > monitoring/docker-compose.yml
@@ -83,6 +83,7 @@ services:
   prometheus:
     image: prom/prometheus
     container_name: prometheus
+    user: root
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -98,7 +99,12 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      #- GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_CSRF_ALWAYS_CHECK=false
 EOF
 
 cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.json

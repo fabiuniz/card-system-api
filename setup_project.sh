@@ -6,6 +6,8 @@ PACKAGE_PATH="src/main/java/com/fabiano/cardsystem"
 HOST_NAME="vmlinuxd"
 INTERNAL_HOST="host.docker.internal"
 INTERNAL_HOST="santander-api"
+URL_FIREBASE="3000-firebase-my-java-app-1756832118227.cluster-f73ibkkuije66wssuontdtbx6q.cloudworkstations.dev"
+URL_FIREBASE=$HOST_NAME
 #HOST_NAME="localhost"
 EMAIL="fabiuniz@msn.com"
 NOME="Fabiano"
@@ -31,10 +33,11 @@ mkdir -p "$PACKAGE_PATH"/{application/service,domain/model,adapter/in/web}
 mkdir -p monitoring/prometheus
 mkdir -p monitoring/grafana/provisioning/datasources
 mkdir -p monitoring/grafana/provisioning/dashboards
+mkdir -p monitoring/nginx
 mkdir -p .idx k8s terraform
 mkdir -p .github/workflows
 # Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
-chmod -R 777 monitoring/grafana/provisioning
+chmod -R 777 monitoring/grafana
 chmod -R 777 monitoring/prometheus
 chmod +x setup_iaas.sh
 
@@ -49,6 +52,30 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
+EOF
+
+cat <<EOF > monitoring/nginx/nginx.conf
+events {}
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    server {
+        listen 80;
+        server_name localhost;
+
+        location / {
+            root   /usr/share/nginx/html;
+            index  index.html index.htm;
+        }
+
+        # Opcional: manter logs de erro para facilitar debug se necessário
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   /usr/share/nginx/html;
+        }
+    }
+}
 EOF
 
 cat <<EOF > monitoring/grafana/provisioning/dashboards/dashboard_config.yml
@@ -83,36 +110,59 @@ scrape_configs:
       - targets: ['$INTERNAL_HOST:8080'] # Se rodar API no host e Prom no Docker
 EOF
 
-cat <<EOF > monitoring/docker-compose.yml
+cat <<EOF > docker-compose.yml
 version: "3"
 services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./monitoring/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - monitoring
+
+  santander-api:
+    image: card-system-api:1.0
+    container_name: santander-api
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring
+
   prometheus:
     image: prom/prometheus
     container_name: prometheus
     user: root
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     networks:
-      - default
+      - monitoring
+    depends_on:
+      - santander-api
 
   grafana:
     image: grafana/grafana
     container_name: grafana
-    user: "472" # ID padrão do usuário grafana para evitar conflito de permissão no volume
+    user: "472"
     ports:
       - "3000:3000"
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
     environment:
-      #- GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_SERVER_SERVE_FROM_SUB_PATH=true
-      - GF_SECURITY_CSRF_ALWAYS_CHECK=false
-      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/ # Importante para o Proxy do Google
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+networks:
+  monitoring:
+    driver: bridge # Docker cria a rede automaticamente se não existir
 EOF
 
 cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.json
@@ -268,11 +318,44 @@ management:
     web:
       exposure:
         include: "health,metrics,prometheus"
+      cors:
+        allowed-origins: "*"
+        allowed-methods: "*"
+        allowed-headers: "*"
   endpoint:
     health:
       show-details: always
 EOF
 
+mkdir -p $PACKAGE_PATH/infrastructure/security
+cat <<EOF > $PACKAGE_PATH/infrastructure/security/SecurityConfig.java
+package com.fabiano.cardsystem.infrastructure.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import java.util.List;
+@Configuration
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+            .cors().configurationSource(request -> {
+                CorsConfiguration config = new CorsConfiguration();
+                config.setAllowedOrigins(List.of("*"));
+                config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+                config.setAllowedHeaders(List.of("*"));
+                return config;
+            })
+            .and()
+            .authorizeRequests()
+            .antMatchers("/**").permitAll();
+        return http.build();
+    }
+}
+EOF
 # --- TRANSACTION METRICS (Coração do AIOps) ---
 cat <<EOF > $PACKAGE_PATH/application/service/TransactionMetrics.java
 package com.fabiano.cardsystem.application.service;
@@ -305,7 +388,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.util.Map;
 import java.util.UUID;
 @RestController
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 @RequestMapping("/api/v1/transactions")
 public class TransactionController {
     private final TransactionMetrics metrics;
@@ -479,6 +562,10 @@ cat <<EOF > pom.xml
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-registry-prometheus</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -648,44 +735,36 @@ mvn clean compile
 mvn clean package -DskipTests
 docker build -t card-system-api:1.0 .
 #docker run --rm card-system-api:1.0 java -version
-docker stop santander-api || true && docker rm santander-api || true
-docker run -d -p 8080:8080 --network monitoring_default --name santander-api card-system-api:1.0
-sleep 10
-curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
-curl -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
 
 # --- INICIALIZAÇÃO DO STACK DE MONITORAMENTO ---
-echo "📊 Subindo Prometheus e Grafana..."
+echo "🧹 Limpando containers antigos para evitar conflitos..."
+# Remove containers manuais (caso existam)
+docker stop santander-api prometheus grafana || true
+docker rm santander-api prometheus grafana || true
 
-# Entra na pasta de monitoramento e sobe os containers via docker-compose
-cd monitoring
-docker-compose down || true # Garante que não haja conflitos de execuções anteriores
+# Remove a stack do docker-compose completamente (containers, redes e órfãos)
+docker-compose down --remove-orphans || true
+
+echo "🚀 Iniciando Stack Completa..."
 docker-compose up -d
 
-# Volta para a raiz do projeto
-cd ..
+echo "⏳ Aguardando a API subir (Health Check)..."
+# Loop de espera inteligente
+for i in {1..30}; do
+    if curl -s http://localhost:8080/actuator/health | grep -q "UP"; then
+        echo "✅ API está Online!"
+        break
+    fi
+    echo -n "."
+    sleep 2
+done
 
-echo "✅ Stack de Observabilidade está online!"
+# Simula tráfego inicial para o Agente Python ter dados
+echo "📈 Gerando tráfego de teste..."
+curl -s -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 500}' > /dev/null
+curl -s -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 15000}' > /dev/null
 
-# Preparar Python (AIOps Agent)
-# Validação e Instalação do Python VENV e PIP
-if ! dpkg -l | grep -q "python3-venv"; then
-    echo "⚠️ PYTHON3-VENV: Não encontrado. Instalando..."
-    apt-get update && apt-get install python3-venv python3-pip -y
-fi
-echo "🐍 Configurando ambiente Python isolado..."
-# 1. Garante que estamos na raiz do projeto antes de mexer no venv
-cd "/home/userlnx/docker/script_docker/$PROJECT_NAME"
-# 2. Se houver um venv corrompido ou ativo, limpa tudo
-deactivate 2>/dev/null || true
-rm -rf venv
-# 3. Cria o venv e garante o uso do binário local para as instalações
-python3 -m venv venv
-# 4. Usa o caminho direto para os binários em vez de confiar no 'source' 
-# (Isso evita erros se o bash perder a referência do PATH)
-./venv/bin/pip install --upgrade pip
-./venv/bin/pip install requests
-# 5. Executa o agente usando o python do venv recém-criado
+# Executa o Agente AIOps
 ./venv/bin/python3 scripts/aiops_health_agent.py
 
 echo "✅ Testes de metricas realizado!"

@@ -751,7 +751,7 @@ docker-compose up -d
 echo "⏳ Aguardando a API subir (Health Check)..."
 # Loop de espera inteligente
 for i in {1..30}; do
-    if curl -s http://localhost:8080/actuator/health | grep -q "UP"; then
+    if curl -s http://$HOST_NAME:8080/actuator/health | grep -q "UP"; then
         echo "✅ API está Online!"
         break
     fi
@@ -761,8 +761,8 @@ done
 
 # Simula tráfego inicial para o Agente Python ter dados
 echo "📈 Gerando tráfego de teste..."
-curl -s -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 500}' > /dev/null
-curl -s -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 15000}' > /dev/null
+curl -s -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 500}' > /dev/null
+curl -s -X POST http://$HOST_NAME:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 15000}' > /dev/null
 
 # Executa o Agente AIOps
 ./venv/bin/python3 scripts/aiops_health_agent.py
@@ -775,7 +775,7 @@ BLUE_UNDERLINE='\e[4;34m'
 RED_UNDERLINE='\e[4;31m'
 NC='\e[0m' # No Color (reseta a cor)
 echo -e "\n--- LINKS DA APLICAÇÃO Clique no link (Segure CTRL + Clique): ---"
-echo -e "API Base:   ${BLUE_UNDERLINE}http://$HOST_NAME:8080${NC}"
+echo -e "API Base:   ${BLUE_UNDERLINE}http://$HOST_NAME:8080/api/v1/transactions${NC}"
 echo -e "Swagger UI: ${BLUE_UNDERLINE}http://$HOST_NAME:8080/swagger-ui/index.html${NC}"
 echo -e "Prometheus: ${BLUE_UNDERLINE}http://$HOST_NAME:9090/targets${NC}"
 echo -e "Grafana: ${BLUE_UNDERLINE}http://$HOST_NAME:3000 (Login: admin / Senha: admin${NC}"

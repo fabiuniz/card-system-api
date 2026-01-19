@@ -171,7 +171,7 @@ gcloud artifacts repositories create $PROJECT_ID \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/artifactregistry.writer"if [[ condition ]]; then
-    	#statements
+      #statements
     fi    
 
 cat gcp-key.json    

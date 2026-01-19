@@ -92,6 +92,3 @@ flowchart LR
     style Fase1 fill:#fff5f5,stroke:#ff8c8c,stroke-width:2px
     style Fase2 fill:#f5fff5,stroke:#8cff8c,stroke-width:2px
     style Fase3 fill:#f5f5ff,stroke:#8c8cff,stroke-width:2px
-
-
-

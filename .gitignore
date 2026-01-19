@@ -3,4 +3,3 @@ target/
 .idea/
 *.class
 .DS_Store
-quiz.js

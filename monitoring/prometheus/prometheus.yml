@@ -5,4 +5,4 @@ scrape_configs:
   - job_name: 'card-system-api'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['host.docker.internal:8080'] # Se rodar API no host e Prom no Docker
+      - targets: ['santander-api:8080'] # Se rodar API no host e Prom no Docker

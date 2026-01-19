@@ -117,7 +117,7 @@ services:
     image: nginx:latest
     container_name: nginx-proxy
     ports:
-      - "80:80"
+      - "8081:80"
     volumes:
       - ./monitoring/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:

@@ -1,7 +1,7 @@
 import requests
 
 def analyze_health():
-    url = "http://vmlinuxd:8080/actuator/prometheus"
+    url = "http://localhost:8080/actuator/prometheus"
     try:
         response = requests.get(url)
         lines = response.text.split('\n')

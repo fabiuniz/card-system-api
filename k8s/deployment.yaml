@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - name: card-api
-        image: gcr.io/santander-repo/card-system-api:1.0
+        image: card-system-api:1.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         resources:
@@ -26,14 +27,12 @@ spec:
           limits:
             cpu: "500m"
             memory: "1Gi"
-        # Garante que o tráfego só chegue quando a JVM subir
         readinessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
           initialDelaySeconds: 20
           periodSeconds: 10
-        # Reinicia o container se a aplicação travar
         livenessProbe:
           httpGet:
             path: /actuator/health

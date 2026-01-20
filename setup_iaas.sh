@@ -420,7 +420,8 @@ spec:
     spec:
       containers:
       - name: card-api
-        image: gcr.io/santander-repo/card-system-api:1.0
+        image: card-system-api:1.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         resources:
@@ -430,14 +431,12 @@ spec:
           limits:
             cpu: "500m"
             memory: "1Gi"
-        # Garante que o tráfego só chegue quando a JVM subir
         readinessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
           initialDelaySeconds: 20
           periodSeconds: 10
-        # Reinicia o container se a aplicação travar
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -730,6 +729,103 @@ networks:
   monitoring:
     driver: bridge # Docker cria a rede automaticamente se não existir
 EOF
+
+# --- TOOL SETUP MINIKUBE (Reconstrução do Cluster) ---
+cat <<EOF > setup_all_minikube.sh
+#!/bin/bash
+
+echo "📦 Carregando imagem base do Minikube..."
+#docker pull gcr.io/k8s-minikube/kicbase:v0.0.44
+docker load -i kicbase_minikube.tar 
+
+echo "📥 Instalando binário do Minikube..."
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+install minikube-linux-amd64 /usr/local/bin/minikube
+
+echo "🚀 Iniciando Cluster com permissões de Root..."
+minikube start --driver=docker --base-image="gcr.io/k8s-minikube/kicbase:v0.0.48" --force
+
+cd /home/userlnx/docker/script_docker/card-system-api/
+# 2. Gere o pacote JAR da aplicação
+mvn clean package -DskipTests
+# 3. Construa a imagem Docker localmente
+docker build -t card-system-api:1.0 .
+
+echo "🖼️ Injetando imagem da API no Cluster..."
+minikube image load card-system-api:1.0
+
+echo "☸️ Aplicando Manifestos Kubernetes..."
+# Usando o kubectl embutido no minikube para evitar erro de 'command not found'
+minikube kubectl -- apply -f k8s/deployment.yaml
+minikube kubectl -- apply -f k8s/service.yaml
+minikube kubectl -- apply -f k8s/hpa.yaml
+
+echo "📊 Ativando Servidor de Métricas para AIOps/HPA..."
+minikube addons enable metrics-server
+
+
+echo "🚀 iniciando Servidor ..."
+minikube service santander-card-api-service 
+echo "✅ Externando acesso ao host ..."
+minikube kubectl -- port-forward service/santander-card-api-service 8080:80 --address 0.0.0.0
+
+echo "✅ Ambiente K8s pronto!"
+echo "🌐 http://${PROJETO_CONF[INTERNAL_HOST]}:8080/api/v1/transactions"
+echo "🌐 http://${PROJETO_CONF[INTERNAL_HOST]}:8080/swagger-ui/index.html"
+
+minikube status
+EOF
+
+cat <<EOF > setup_k8s.sh
+#!/bin/bash
+
+# Define a raiz do projeto dinamicamente para evitar caminhos fixos "hardcoded"
+BASE_DIR=\$(pwd)
+
+echo "📦 Preparando infraestrutura do Minikube..."
+# Se o arquivo tar estiver na raiz, o caminho funciona. 
+# Se estiver em outro lugar, ajuste para o caminho correto.
+if [ -f "kicbase_minikube.tar" ]; then
+    docker load -i kicbase_minikube.tar
+fi
+
+echo "🚀 Iniciando Cluster Minikube..."
+minikube start --driver=docker --base-image="gcr.io/k8s-minikube/kicbase:v0.0.48" --force
+
+echo "🔨 Gerando pacote JAR com Maven..."
+mvn clean package -DskipTests
+
+echo "🐳 Construindo imagem Docker da API..."
+docker build -t card-system-api:1.0 .
+
+echo "🖼️ Injetando imagem no Minikube..."
+minikube image load card-system-api:1.0
+
+echo "☸️ Aplicando Manifestos do diretório k8s/..."
+# Aqui está o segredo: apontamos para a pasta sem entrar nela
+minikube kubectl -- apply -f \${BASE_DIR}/k8s/
+
+echo "📊 Ativando Metrics Server..."
+minikube addons enable metrics-server
+
+echo "⏳ Aguardando os Pods ficarem prontos..."
+minikube kubectl -- wait --for=condition=ready pod -l app=card-api --timeout=120s
+
+echo "✅ Ambiente pronto! Iniciando Port-Forward..."
+echo "Acesse em: http://localhost:8080"
+
+# O port-forward bloqueia o terminal. 
+# Rodamos o comando service em background para não travar o script.
+minikube service santander-card-api-service &
+
+# Mantém o port-forward ativo no terminal principal
+minikube kubectl -- port-forward service/santander-card-api-service 8080:80 --address 0.0.0.0
+EOF
+
+# Dá permissão de execução
+chmod +x setup_all_minikube.sh
+
+chmod +x setup_k8s.sh
 
 # --- TOOL SCRIPT DE LIMPEZA ---
 cat <<EOF > clear_all_service.sh

@@ -81,16 +81,12 @@ docker run -d -p 8080:8080 --name santander-api card-system-api:1.0
 
 **Aprovação de Transação (Valor < 10.000):**
 ```bash
-curl -X POST http://localhost:8080/api/v1/transactions \
--H "Content-Type: application/json" \
--d '{"cardNumber": "1234-5678", "amount": 500.00}'
+curl -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 500.00}'
 ```
 
 **Rejeição de Transação (Valor > 10.000):**
 ```bash
-curl -X POST http://localhost:8080/api/v1/transactions \
--H "Content-Type: application/json" \
--d '{"cardNumber": "1234-5678", "amount": 15000.00}'
+curl -X POST http://localhost:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "1234-5678", "amount": 15000.00}'
 ```
 ### 🤖 Validando a Camada de AIOps
 Após subir o container, você pode validar a telemetria que alimenta nossa IA:
@@ -141,21 +137,14 @@ gcloud services enable run.googleapis.com --project=santander-repo
 gcloud iam service-accounts create github-deploy-sa || echo "Conta já existe"
 
 # 4. Atribuir permissões usando a variável $PROJECT_ID
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
-    --role="roles/run.admin"
+gcloud projects add-iam-policy-binding $PROJECT_ID     --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com"     --role="roles/run.admin"
 
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
-    --role="roles/artifactregistry.writer"
+gcloud projects add-iam-policy-binding $PROJECT_ID     --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com"     --role="roles/artifactregistry.writer"
 
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
-    --role="roles/iam.serviceAccountUser"
+gcloud projects add-iam-policy-binding $PROJECT_ID     --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com"     --role="roles/iam.serviceAccountUser"
 
 # 5. Gerar a chave JSON
-gcloud iam service-accounts keys create gcp-key.json \
-    --iam-account=github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com
+gcloud iam service-accounts keys create gcp-key.json     --iam-account=github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com
 
 # Garante que você está no projeto correto
 gcloud config set project $PROJECT_ID
@@ -163,14 +152,9 @@ gcloud config set project $PROJECT_ID
 # Habilita a API do Artifact Registry
 gcloud services enable artifactregistry.googleapis.com
 
-gcloud artifacts repositories create $PROJECT_ID \
-    --repository-format=docker \
-    --location=us-central1 \
-    --description="Repositorio Docker para o Santander F1RST"
+gcloud artifacts repositories create $PROJECT_ID     --repository-format=docker     --location=us-central1     --description="Repositorio Docker para o Santander F1RST"
 
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com" \
-    --role="roles/artifactregistry.writer"if [[ condition ]]; then
+gcloud projects add-iam-policy-binding $PROJECT_ID     --member="serviceAccount:github-deploy-sa@$PROJECT_ID.iam.gserviceaccount.com"     --role="roles/artifactregistry.writer"if [[ condition ]]; then
       #statements
     fi    
 
@@ -256,9 +240,7 @@ Caso o gráfico esteja vazio, execute o comando abaixo no terminal para simular 
 ```promql
 
 for i in {1..50}; do 
-  curl -s -X POST http://vmlinuxd:8080/api/v1/transactions \
-  -H "Content-Type: application/json" \
-  -d "{\"cardNumber\": \"1234\", \"amount\": \$((RANDOM % 15000))}" > /dev/null
+  curl -s -X POST http://vmlinuxd:8080/api/v1/transactions   -H "Content-Type: application/json"   -d "{\"cardNumber\": \"1234\", \"amount\": $((RANDOM % 15000))}" > /dev/null
   sleep 0.5
 done
 ```

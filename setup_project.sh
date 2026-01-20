@@ -56,137 +56,21 @@ chmod -R 777 monitoring/grafana
 chmod -R 777 monitoring/prometheus
 chmod +x setup_iaas.sh
 
+# Conteúdo do setup_iaas.sh
 # --- DOCUMENTAÇÃO TÉCNICA (README) ---
 # --- DOCUMENTAÇÃO TÉCNICA (Mermaid Flow) ---
 # --- KUBERNETES: DEPLOYMENT ---
 # --- KUBERNETES: HPA & SERVICE ---
 # --- TERRAFORM: GOOGLE CLOUD ---
-# --- DOCKERFILE ---
 # --- GITHUB ACTIONS: CI/CD ---
+# --- NGNIX ---
+# --- GRAFANA DATASOURCE ---
+# --- GRAFANA CONFIG--- 
+# --- PROMETHEUS ---
+# --- DOCKERFILE ---
+# --- DOCKER COMPOSE ---
 # --- TOOL SCRIPT DE LIMPEZA ---
 . setup_iaas.sh
-
-cat <<EOF > monitoring/grafana/provisioning/datasources/datasource.yml
-apiVersion: 1
-datasources:
-  - name: Prometheus
-    type: prometheus
-    uid: prometheus
-    access: proxy
-    url: http://prometheus:9090
-    isDefault: true
-EOF
-
-cat <<EOF > monitoring/nginx/nginx.conf
-events {}
-http {
-    include       /etc/nginx/mime.types;
-    default_type  application/octet-stream;
-
-    server {
-        listen 80;
-        server_name ${PROJETO_CONF[HOST_NAME]};
-
-        location / {
-            root   /usr/share/nginx/html;
-            index  index.html index.htm;
-        }
-
-        # Opcional: manter logs de erro para facilitar debug se necessário
-        error_page   500 502 503 504  /50x.html;
-        location = /50x.html {
-            root   /usr/share/nginx/html;
-        }
-    }
-}
-EOF
-
-cat <<EOF > monitoring/grafana/provisioning/dashboards/dashboard_config.yml
-apiVersion: 1
-providers:
-  - name: 'Default'
-    orgId: 1
-    folder: ''
-    type: file
-    disableDeletion: false
-    editable: true
-    options:
-      path: /etc/grafana/provisioning/dashboards
-EOF
-
-# Baixa o dashboard padrão da JVM (ID 4701)
-curl -s https://grafana.com/api/dashboards/4701/revisions/10/download > monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
-
-# Garante que qualquer referência de datasource aponte para o seu UID "prometheus"
-sed -i 's/\${DS_PROMETHEUS}/prometheus/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
-sed -i 's/"datasource": ".*"/"datasource": "prometheus"/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
-sed -i 's/"from": "now-24h"/"from": "now-1m"/g' monitoring/grafana/provisioning/dashboards/jvm_micrometer.json
-
-cat <<EOF > monitoring/prometheus/prometheus.yml
-global:
-  scrape_interval: 5s
-
-scrape_configs:
-  - job_name: 'card-system-api'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['${PROJETO_CONF[INTERNAL_HOST]}:8080'] # Se rodar API no host e Prom no Docker
-EOF
-
-cat <<EOF > docker-compose.yml
-version: "3"
-services:
-  nginx:
-    image: nginx:latest
-    container_name: nginx-proxy
-    ports:
-      - "8081:80"
-    volumes:
-      - ./monitoring/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    networks:
-      - monitoring
-
-  santander-api:
-    image: card-system-api:1.0
-    container_name: santander-api
-    ports:
-      - "8080:8080"
-    networks:
-      - monitoring
-
-  prometheus:
-    image: prom/prometheus
-    container_name: prometheus
-    user: root
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    networks:
-      - monitoring
-    depends_on:
-      - santander-api
-
-  grafana:
-    image: grafana/grafana
-    container_name: grafana
-    user: "472"
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-    environment:
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-    networks:
-      - monitoring
-    depends_on:
-      - prometheus
-
-networks:
-  monitoring:
-    driver: bridge # Docker cria a rede automaticamente se não existir
-EOF
 
 cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.json
 {

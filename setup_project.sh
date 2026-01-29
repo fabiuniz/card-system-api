@@ -72,6 +72,9 @@ chmod +x setup_iaas.sh
 # --- TOOL SCRIPT DE LIMPEZA ---
 . setup_iaas.sh
 
+# --- Metricas sobre o projeto ---
+. setup_analyses.sh
+
 cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.json
 {
   "annotations": { "list": [ { "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard" } ] },

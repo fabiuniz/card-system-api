@@ -776,6 +776,8 @@ echo "🌐 http://${PROJETO_CONF[INTERNAL_HOST]}:8080/swagger-ui/index.html"
 minikube status
 EOF
 
+# --- TOOL SETUP MINIKUBE (Reconstrução do Cluster) ---
+
 cat <<EOF > setup_k8s.sh
 #!/bin/bash
 
@@ -821,6 +823,107 @@ minikube service santander-card-api-service &
 # Mantém o port-forward ativo no terminal principal
 minikube kubectl -- port-forward service/santander-card-api-service 8080:80 --address 0.0.0.0
 EOF
+
+# 1. Cria o arquivo de variáveis na pasta correta ANTES do script
+mkdir -p terraform
+cat <<EOF > terraform/terraform.tfvars
+project_id = "seu-id-do-gcp-aqui"
+region     = "us-central1"
+EOF
+
+mkdir -p terraform
+cat <<EOF > terraform/local.tf
+# Definindo que o Terraform vai falar com o seu Docker local
+provider "docker" {
+  host = "unix:///var/run/docker.sock"
+}
+
+# Criando a imagem localmente (equivalente ao build do compose)
+resource "docker_image" "api_image" {
+  name = "card-system-api:local"
+  build {
+    context = ".." # Sobe um nível para pegar o Dockerfile na raiz
+  }
+}
+
+# Criando o container
+resource "docker_container" "api_container" {
+  name  = "santander-api-dev"
+  image = docker_image.api_image.image_id
+  
+  ports {
+    internal = 8080
+    external = 8080
+  }
+
+  env = [
+    "SPRING_PROFILES_ACTIVE=dev",
+    "TRANSACTION_LIMIT=5000"
+  ]
+}
+EOF
+
+
+# 2. Cria o script de setup
+cat <<EOF > setup_terraform.sh
+#!/bin/bash
+
+# Garante que estamos na raiz do projeto para começar
+BASE_DIR=\$(pwd)
+
+echo "🛠️ Instalando Terraform e Dependências..."
+apt-get update && apt-get install -y gnupg software-properties-common curl lsb-release
+
+# Chave GPG e Repositório
+curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg --yes
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com \$(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+
+apt-get update && apt-get install terraform -y
+
+echo "🚀 Validando instalação..."
+terraform -version
+
+# Entra na pasta terraform existente (onde estão seus arquivos .tf)
+cd \${BASE_DIR}/terraform
+
+echo "📥 Inicializando Providers em: \$(pwd)"
+# Limpeza para evitar erros de cache/deadline
+rm -rf .terraform/ .terraform.lock.hcl
+
+MAX_RETRIES=3
+COUNT=0
+SUCCESS=false
+
+until [ \$COUNT -ge \$MAX_RETRIES ]; do
+    if terraform init; then
+        echo "✅ Terraform inicializado com sucesso!"
+        SUCCESS=true
+        break
+    else
+        COUNT=\$((COUNT+1))
+        echo "⚠️ Falha na conexão (Tentativa \$COUNT/\$MAX_RETRIES). Tentando novamente em 10s..."
+        sleep 10
+    fi
+done
+
+if [ "\$SUCCESS" = false ]; then
+    echo "❌ Erro crítico: Falha ao baixar providers."
+    exit 1
+fi
+
+echo "🛡️ Dica: Agora execute 'gcloud auth application-default login'"
+EOF
+chmod +x setup_terraform.sh
+
+cat <<EOF > deploy_infra.sh
+#!/bin/bash
+cd terraform/
+echo "🔍 Verificando plano de infraestrutura..."
+terraform plan -out=tfplan
+echo "🚀 Aplicando mudanças no GCP..."
+terraform apply tfplan
+EOF
+chmod +x deploy_infra.sh
 
 # Dá permissão de execução
 chmod +x setup_all_minikube.sh

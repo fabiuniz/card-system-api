@@ -10,6 +10,7 @@ fi
 echo "🏗️ Configurando Camada de Métricas do projeto $NOME_PROJETO..."
 
 mkdir -p analyses/looker
+mkdir -p analyses/powerbi
 
 # ---------------------------------------------------------
 # 1. GERANDO O ARQUIVO LOOKML (MODO PROFISSIONAL/ENTERPRISE)

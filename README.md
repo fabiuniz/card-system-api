@@ -25,7 +25,8 @@ Diferente da versão inicial de Analista III, esta branch introduz conceitos ava
 - **Python AIOps Agent**: Script lateral (`/scripts`) que consome dados de saúde da API para automação de incidentes.
 - **FinOps Ready**: Configuração de limites de recursos (CPU/MEM) no CI/CD para otimização de custos no GCP Cloud Run.
 - **Resiliência Nativa**: Implementação de *Liveness* e *Readiness Probes* para garantir o Self-healing do container.
- 
+- **Analytics Integrado**: Camada de dados pronta para BI (Looker) para visão executiva do negócio.
+- 
 ## 🚀 Tecnologias e Frameworks
 - **Java 11**: Linguagem base para conformidade com o ecossistema atual.
 - **Spring Boot 2.7**: Framework para agilidade no desenvolvimento de microserviços.
@@ -37,11 +38,13 @@ Diferente da versão inicial de Analista III, esta branch introduz conceitos ava
 - **OpenAPI/Swagger**: Documentação interativa integrada para facilitar o consumo por times de Frontend e Integração.
 - **GitHub Actions**: Esteira de CI/CD totalmente automatizada.
 - **Google Cloud Platform (GCP)**: Infraestrutura de hospedagem via Cloud Run (Serverless). 
+- **Prometheus & Grafana**: Dashboards técnicos de saúde do sistema (SRE).
+- **Kubernetes (Minikube)**: Orquestração local com suporte a HPA e Metrics Server.
+- **Terraform**: Infraestrutura como Código para GCP e Docker local.
+- **Looker / LookML**: Modelagem de dados para análise de KPIs.
 
 ## 🏗️ Arquitetura
 O projeto utiliza **Arquitetura Hexagonal** para isolar o domínio das tecnologias externas (bancos de dados, frameworks, APIs externas). 
-
-
 
 - **Domain**: Entidades e regras de negócio puras.
 - **Application**: Casos de uso e portas de entrada/saída.
@@ -261,6 +264,15 @@ No seu terminal, dentro da pasta terraform:
 Inicializar: terraform init
 Validar: terraform plan -var="project_id=santander-repo"
 Provisionar: terraform apply -var="project_id=santander-repo"
+
+## 📊 Analytics & BI Layer (Looker)
+Além da observabilidade técnica, o projeto conta com uma camada de inteligência de negócios preparada para o **Looker (Professional ou Studio)**, permitindo análises executivas sobre o comportamento das transações.
+
+- **LookML View**: Definição de métricas de negócio (Taxa de Aprovação, Volume Financeiro) e métricas SRE (SLA de Latência > 200ms) diretamente no código.
+- **Data Generator**: Script automatizado (`setup_analyses.sh`) que gera massa de dados sintéticos e instruções de conexão para BigQuery.
+- **Visualização Condicional**: Formatação HTML integrada para status de transações (Verde para Approved / Vermelho para Rejected).
+
+**Para configurar:** Execute `./setup_analyses.sh` e siga as instruções geradas no diretório `analyses/looker/`.
 
 ### 🛠️ Metodologia e Uso de IA
 Este projeto foi desenvolvido utilizando uma abordagem de Engenharia Aumentada por IA.

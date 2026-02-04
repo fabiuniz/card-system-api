@@ -13,31 +13,20 @@ resource "google_artifact_registry_repository" "santander_repo" {
 
 # 2. Serviço Cloud Run (API)
 resource "google_cloud_run_service" "card_api" {
-  name     = var.service_name
+  name     = "santander-card-api"
   location = var.region
 
   template {
-    metadata {
-      annotations = {
-        # Limites de Escalonamento para controle de custos (FinOps)
-        "autoscaling.knative.dev/maxScale" = "5"
-        "autoscaling.knative.dev/minScale" = "0"
-      }
-    }
     spec {
       containers {
-        # Interpolação dinâmica: une região, projeto e nome do repositório
+        # Imagem placeholder - será atualizada pelo CI/CD
         image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.santander_repo.repository_id}/card-system-api:latest"
         
         resources {
           limits = {
-            cpu    = "1000m" # 1 vCPU
+            cpu    = "1000m" # 1 vCPU (FinOps: limite controlado)
             memory = "512Mi"
           }
-        }
-        
-        ports {
-          container_port = 8080
         }
       }
     }

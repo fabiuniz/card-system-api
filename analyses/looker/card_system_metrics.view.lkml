@@ -5,6 +5,25 @@
 # 2. Certifique-se de que a conexão "ficticio" está ativa no seu BigQuery.
 # 3. Adicione "explore: card_system_metrics {}" ao seu arquivo de model.
 
+# GUIA DE CONEXÃO E INFRAESTRUTURA (LOOKER PROFESSIONAL)
+# ==========================================================
+# O que é a conexão "ficticio" mencionada abaixo?
+# 
+# 1. NO GOOGLE CLOUD (BigQuery):
+#    - Crie um Dataset chamado 'ficticio'.
+#    - Crie uma tabela chamada 'transacoes_santander'.
+#    - Comando para subir o CSV via terminal:
+#      bq load --source_format=CSV --autodetect ficticio.transacoes_santander ./dados_ficticios_transacoes.csv
+#
+# 2. NO LOOKER ADMIN:
+#    - Vá em Admin > Connections > Add Connection.
+#    - Nome: "ficticio" (Exatamente como no parâmetro 'connection' do Model).
+#    - Dialeto: Google BigQuery Standard SQL.
+#    - Billing Project ID: O ID do seu projeto no GCP.
+#
+# 3. NO LOOKER MODEL:
+#    - Certifique-se de que o arquivo .model inclua: connection: "ficticio"
+# ==========================================================
 
 view: card_system_metrics {
   sql_table_name: `ficticio.transacoes_santander` ;;

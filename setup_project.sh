@@ -41,16 +41,15 @@ fi
 echo "🚀 Iniciando criação do projeto ${PROJETO_CONF[PROJECT_NAME]}..."
 
 # 1. Criar estrutura de pastas (REMOVIDO o ${PROJETO_CONF[PROJECT_NAME]} do caminho inicial)
-mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,application/service,application/ports/out,adapter/in/web,adapter/out/db}
-mkdir -p scripts
-mkdir -p src/main/resources
-mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{application/service,domain/model,adapter/in/web}
-mkdir -p monitoring/prometheus
-mkdir -p monitoring/grafana/provisioning/datasources
-mkdir -p monitoring/grafana/provisioning/dashboards
-mkdir -p monitoring/nginx
-mkdir -p .idx k8s terraform
-mkdir -p .github/workflows
+# Cria toda a estrutura de uma vez, sem repetições
+# a. CORE DA APLICAÇÃO (Arquitetura Hexagonal Java)
+mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,application/{service,ports/{in,out}},adapters/{in/web/exception,out/{persistence,metrics}},infrastructure/{security,config}}
+# b. OBSERVABILIDADE (Prometheus, Grafana, Nginx)
+mkdir -p monitoring/{prometheus,grafana/provisioning/{datasources,dashboards},nginx}
+# c. INFRAESTRUTURA & CLOUD (IaaS, K8s, Terraform)
+mkdir -p {.idx,k8s,terraform}
+# d. CI/CD & RECURSOS (GitHub, Scripts, Resources)
+mkdir -p {.github/workflows,scripts,src/main/resources}
 # Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
 chmod -R 777 monitoring/grafana
 chmod -R 777 monitoring/prometheus
@@ -159,28 +158,12 @@ public class SecurityConfig {
 }
 EOF
 # --- TRANSACTION METRICS (Coração do AIOps) ---
-cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/application/service/TransactionMetrics.java
-package com.fabiano.cardsystem.application.service;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.stereotype.Service;
+# removido cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/application/service/TransactionMetrics.java
 
-@Service
-public class TransactionMetrics {
-    private final Counter approved;
-    private final Counter rejected;
-    public TransactionMetrics(MeterRegistry registry) {
-        this.approved = Counter.builder("transactions_total").tag("status", "approved").register(registry);
-        this.rejected = Counter.builder("transactions_total").tag("status", "rejected").register(registry);
-    }
-    public void incrementApproved() { approved.increment(); }
-    public void incrementRejected() { rejected.increment(); }
-}
-EOF
 
 # --- TRANSACTION CONTROLLER (Com Logs e Métricas) ---
-cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapter/in/web/TransactionController.java
-package com.fabiano.cardsystem.adapter.in.web;
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/in/web/TransactionController.java
+package com.fabiano.cardsystem.adapters.in.web;
 import com.fabiano.cardsystem.domain.model.Transaction;
 import com.fabiano.cardsystem.application.service.TransactionMetrics;
 import org.springframework.web.bind.annotation.*;
@@ -383,25 +366,23 @@ EOF
 # 3. Criar a Classe de Domínio (Pure Java)
 cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/domain/model/Transaction.java
 package com.fabiano.cardsystem.domain.model;
-
-import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 
 public class Transaction {
-    @Schema(example = "1234-5678-9012-3456")
     private String cardNumber;
-    
-    @Schema(example = "500.00")
     private BigDecimal amount;
-    
-    private Long id;
     private String status;
+    private String transactionId;
 
     public Transaction() {}
+    public String getCardNumber() { return cardNumber; }
+    public void setCardNumber(String cardNumber) { this.cardNumber = cardNumber; }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
-    public BigDecimal getAmount() { return amount; }
-    public String getCardNumber() { return cardNumber; }
+    public String getTransactionId() { return transactionId; }
+    public void setTransactionId(String transactionId) { this.transactionId = transactionId; }
 }
 EOF
 
@@ -418,6 +399,41 @@ public class CardSystemApplication {
     public static void main(String[] args) {
         SpringApplication.run(CardSystemApplication.class, args);
     }
+}
+EOF
+
+
+# Criando a Porta de Saída para Métricas
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/application/ports/out/TransactionOutputPort.java
+package com.fabiano.cardsystem.application.ports.out;
+
+public interface TransactionOutputPort {
+    void reportApproval();
+    void reportRejection();
+}
+EOF
+
+# --- ADAPTER OUT: Implementação Micrometer (Infrastructure Layer) ---
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/out/metrics/TransactionMetricsAdapter.java
+package com.fabiano.cardsystem.adapters.out.metrics;
+
+import com.fabiano.cardsystem.application.ports.out.TransactionOutputPort;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.stereotype.Component;
+
+@Component
+public class TransactionMetricsAdapter implements TransactionOutputPort {
+    private final Counter approved;
+    private final Counter rejected;
+
+    public TransactionMetricsAdapter(MeterRegistry registry) {
+        this.approved = Counter.builder("transactions_total").tag("status", "approved").register(registry);
+        this.rejected = Counter.builder("transactions_total").tag("status", "rejected").register(registry);
+    }
+
+    @Override public void reportApproval() { approved.increment(); }
+    @Override public void reportRejection() { rejected.increment(); }
 }
 EOF
 
@@ -463,35 +479,42 @@ class TransactionTest {
 }
 EOF
 
-mkdir -p src/main/java/com/fabiano/cardsystem/adapter/in/web
-cat <<EOF > src/main/java/com/fabiano/cardsystem/adapter/in/web/TransactionController.java
-package com.fabiano.cardsystem.adapter.in.web;
+mkdir -p src/main/java/com/fabiano/cardsystem/adapters/in/web
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/in/web/TransactionController.java
+package com.fabiano.cardsystem.adapters.in.web;
+
 import com.fabiano.cardsystem.domain.model.Transaction;
-import com.fabiano.cardsystem.application.service.TransactionMetrics;
+import com.fabiano.cardsystem.application.ports.out.TransactionOutputPort;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import java.util.Map;
 import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/transactions")
 public class TransactionController {
-    private final TransactionMetrics metrics;
-    public TransactionController(TransactionMetrics metrics) {
-        this.metrics = metrics;
+    private final TransactionOutputPort metricsPort;
+
+    public TransactionController(TransactionOutputPort metricsPort) {
+        this.metricsPort = metricsPort;
     }
+
     @PostMapping
     public ResponseEntity<?> process(@RequestBody Transaction transaction) {
         if (transaction.getAmount() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Amount is required"));
         }
+
         if (transaction.getAmount().doubleValue() > 10000) {
-            metrics.incrementRejected();
+            metricsPort.reportRejection();
             return ResponseEntity.status(422).body(Map.of(
                 "status", "REJECTED",
+                "reason", "Limit exceeded",
                 "transactionId", UUID.randomUUID().toString()
             ));
         }
-        metrics.incrementApproved();
+
+        metricsPort.reportApproval();
         return ResponseEntity.ok(Map.of(
             "status", "APPROVED",
             "transactionId", UUID.randomUUID().toString()

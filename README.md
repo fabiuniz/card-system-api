@@ -14,7 +14,9 @@ Este projeto é um Microserviço focado no processamento de transações de cart
 ## 📖 Storytelling: A Jornada da Resiliência
 Imagine uma **Black Friday** no ecossistema **Santander**. Milhares de transações por segundo cruzam a rede. Neste cenário, uma falha não é apenas um erro de log; é um cliente impossibilitado de comprar. 
 
-Este projeto nasceu para transcender o desenvolvimento tradicional. Não entregamos apenas código; entregamos **Disponibilidade**. Através da **Arquitetura Hexagonal**, isolamos o core bancário de instabilidades externas. Com o **HPA (Horizontal Pod Autoscaler)**, nossa infraestrutura "respira" conforme a demanda, e através de um **Agente AIOps em Python**, detectamos anomalias antes que elas afetem o cliente final. É a engenharia de software aliada à inteligência operacional para garantir um sistema que nunca dorme.
+Este projeto nasceu para transcender o desenvolvimento tradicional. 
+## **Abordagem SRE-Driven:**
+Este projeto não foi apenas "codado"; ele foi projetado para ser resiliente. A infraestrutura e a observabilidade foram definidas como requisitos de primeira classe antes da implementação da lógica de negócio onde é entregue **Disponibilidade**. Através da **Arquitetura Hexagonal**, isolamos o core bancário de instabilidades externas. Com o **HPA (Horizontal Pod Autoscaler)**, nossa infraestrutura "respira" conforme a demanda, e através de um **Agente AIOps em Python**, detectamos anomalias antes que elas afetem o cliente final. É a engenharia de software aliada à inteligência operacional para garantir um sistema que nunca dorme.
 
 ---
 

@@ -74,6 +74,10 @@ chmod +x setup_application.sh
 . setup_application.sh
 # --- Metricas sobre o projeto ---
 . setup_analyses.sh
+
+
+
+
 #curl -s "https://get.sdkman.io" | bash
 #source "$HOME/.sdkman/bin/sdkman-init.sh"
 #sdk list java | grep "11."

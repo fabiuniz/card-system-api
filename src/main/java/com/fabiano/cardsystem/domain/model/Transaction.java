@@ -2,9 +2,7 @@ package com.fabiano.cardsystem.domain.model;
 import java.math.BigDecimal;
 
 public class Transaction {
-    @Schema(example = "1234-5678-9012-3456")
     private String cardNumber;
-    @Schema(example = "500.00")
     private BigDecimal amount;
     private String status;
     private String transactionId;

@@ -15,7 +15,7 @@ Este projeto é um Microserviço focado no processamento de transações de cart
 Imagine uma **Black Friday** no ecossistema **Santander**. Milhares de transações por segundo cruzam a rede. Neste cenário, uma falha não é apenas um erro de log; é um cliente impossibilitado de comprar. 
 
 Este projeto nasceu para transcender o desenvolvimento tradicional. 
-## **Abordagem SRE-Driven:**
+## **♾️ Abordagem SRE-Driven:**
 Este projeto não foi apenas "codado"; ele foi projetado para ser resiliente. A infraestrutura e a observabilidade foram definidas como requisitos de primeira classe antes da implementação da lógica de negócio onde é entregue **Disponibilidade**. Através da **Arquitetura Hexagonal**, isolamos o core bancário de instabilidades externas. Com o **HPA (Horizontal Pod Autoscaler)**, nossa infraestrutura "respira" conforme a demanda, e através de um **Agente AIOps em Python**, detectamos anomalias antes que elas afetem o cliente final. É a engenharia de software aliada à inteligência operacional para garantir um sistema que nunca dorme.
 
 ---
@@ -275,6 +275,33 @@ Além da observabilidade técnica, o projeto conta com uma camada de inteligênc
 - **Visualização Condicional**: Formatação HTML integrada para status de transações (Verde para Approved / Vermelho para Rejected).
 
 **Para configurar:** Execute `./setup_analyses.sh` e siga as instruções geradas no diretório `analyses/looker/`.
+
+
+## 🎨 Camada de Visualização (Frontend Vue.js 3)
+
+Para complementar a robustez do backend, o sistema conta com um **Dashboard Operacional** moderno, desenvolvido em **Vue.js 3** com **Vite**, focado na experiência do operador e em testes rápidos de transação.
+
+- **Interface Reativa**: Desenvolvida com a Composition API para alta performance e baixa latência.
+- **Design System Santander**: Estilização baseada no framework **Tailwind CSS**, utilizando as cores institucionais (#ec1c24) e tipografia limpa.
+- **Proxy Inteligente**: Configuração de `vite.config.js` preparada para ambientes de containers, resolvendo automaticamente o roteamento para a API Java via rede interna Docker.
+
+
+### 🛠️ Tecnologias do Frontend
+- **Vue.js 3**: Framework progressivo para interfaces reativas.
+- **Vite**: Build tool de próxima geração para um desenvolvimento instantâneo.
+- **Tailwind CSS**: Estilização utility-first para um layout responsivo e profissional.
+- **Axios**: Cliente HTTP para comunicação assíncrona com o microserviço Java.
+
+---
+
+## 🏗️ Como Executar o Frontend
+
+### No Ambiente Docker (Recomendado)
+O Frontend já faz parte do `docker-compose.yml` e subirá automaticamente junto com a stack de monitoramento:
+```bash
+docker-compose up -d
+
+---
 
 ### 🛠️ Metodologia e Uso de IA
 Este projeto foi desenvolvido utilizando uma abordagem de Engenharia Aumentada por IA.

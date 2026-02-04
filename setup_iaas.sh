@@ -399,6 +399,16 @@ services:
     networks:
       - monitoring
 
+  santander-front-vue:
+      build: ./card-system-front-vue
+      container_name: santander-front-vue
+      ports:
+        - "4000:4000"
+      networks:
+        - monitoring
+      depends_on:
+        - santander-api
+
   santander-api:
     image: card-system-api:1.0
     container_name: santander-api

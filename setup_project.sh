@@ -55,6 +55,7 @@ chmod -R 777 monitoring/grafana
 chmod -R 777 monitoring/prometheus
 chmod +x setup_iaas.sh
 chmod +x setup_application.sh 
+chmod +x setup_front_vue.sh
 
 # Conteúdo do setup_iaas.sh
 # --- DOCUMENTAÇÃO TÉCNICA (README) ---
@@ -74,7 +75,7 @@ chmod +x setup_application.sh
 . setup_application.sh
 # --- Metricas sobre o projeto ---
 . setup_analyses.sh
-
+. setup_front_vue.sh
 
 
 
@@ -143,6 +144,7 @@ echo -e "API Base:   ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/api
 echo -e "Swagger UI: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/swagger-ui/index.html${NC}"
 echo -e "Prometheus: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:9090/targets${NC}"
 echo -e "Grafana: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:3000 (Login: admin / Senha: admin${NC}"
+echo -e "Vue Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4000 {NC}"
 echo -e "Actuator: ${RED_UNDERLINE}curl http://${PROJETO_CONF[HOST_NAME]}:8080/actuator/prometheus${NC}"
 echo -e "Python: ${RED_UNDERLINE}python3 scripts/aiops_health_agent.py${NC}"
 echo "--------------------------"

@@ -414,10 +414,7 @@ services:
         context: ./card-system-front-react
       container_name: santander-front-react
       ports:
-        - "4300:4300"
-      hostname: ${PROJETO_CONF[INTERNAL_HOST]}
-      extra_hosts:
-        - "${PROJETO_CONF[INTERNAL_HOST]}:127.0.0.1"
+        - "4300:4300"      
       environment:
         - CHOKIDAR_USEPOLLING=true
       networks:

@@ -82,7 +82,10 @@ function App() {
 	  setResult(null);
 
 	  try {
-	    const response = await fetch('/api/v1/transactions', {
+  	    const API_URL = window.location.hostname === '${PROJETO_CONF[HOST_NAME]}' 
+            ? 'http://${PROJETO_CONF[HOST_NAME]}:8080' 
+            : \`https://\${window.location.hostname.replace('4300', '8080')}\`;
+        const response = await fetch(\`\${API_URL}/api/v1/transactions\`, {
 	      method: 'POST',
 	      headers: {
 	        'Content-Type': 'application/json',

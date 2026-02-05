@@ -92,6 +92,7 @@ chmod +x setup_application.sh
 chmod +x setup_front_vue.sh
 chmod +x setup_front_angular.sh
 chmod +x setup_front_react.sh
+for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 
 # Conteúdo do setup_iaas.sh
 # --- DOCUMENTAÇÃO TÉCNICA (README) ---

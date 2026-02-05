@@ -1,5 +1,39 @@
 #!/bin/bash
 
+# --- FUNÇÃO DE VERIFICAÇÃO DE DEPENDÊNCIAS ---
+verificar_ferramentas() {
+    echo "🔍 Verificando dependências do sistema..."
+
+    # 1. Verificar/Instalar Docker
+    if ! command -v docker &> /dev/null; then
+        echo "🐳 Docker não encontrado. Instalando..."
+        curl -fsSL https://get.docker.com | sh
+        systemctl start docker
+        systemctl enable docker
+    else
+        echo "✅ Docker já está instalado."
+    fi
+
+    # 2. Verificar/Instalar Docker Compose
+    if ! command -v docker-compose &> /dev/null; then
+        echo "🐙 Docker Compose não encontrado. Instalando..."
+        # Baixa a versão estável mais recente
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+    else
+        echo "✅ Docker Compose já está instalado."
+    fi
+
+    # 3. Verificar Ferramentas de Rede e Python (O que causou erro antes)
+    echo "📦 Atualizando ferramentas de rede e Python..."
+    apt-get update -qq
+    apt-get install -y curl python3-venv python3-pip &> /dev/null
+}
+
+# 1. INSTALAÇÃO DE DEPENDÊNCIAS (Mover para o topo)
+echo "🔧 Preparando ferramentas do Host..."
+verificar_ferramentas
+
 # Criando o "Objeto" de configuração (Array Associativo)
 unset PROJETO_CONF
 declare -A PROJETO_CONF
@@ -18,7 +52,7 @@ PROJETO_CONF=(
 )
 
 # 3. Faz a atribuição dinâmica (Sincroniza URL com o Host)
-PROJETO_CONF[HOST_NAME]='localhost'
+# PROJETO_CONF[HOST_NAME]='localhost'
 PROJETO_CONF[URL_FIREBASE]=${PROJETO_CONF[HOST_NAME]}
 PROJETO_CONF[URL_FIREBASE]="3000-firebase-my-java-app-1756832118227.cluster-f73ibkkuije66wssuontdtbx6q.cloudworkstations.dev"
 
@@ -56,6 +90,8 @@ chmod -R 777 monitoring/prometheus
 chmod +x setup_iaas.sh
 chmod +x setup_application.sh 
 chmod +x setup_front_vue.sh
+chmod +x setup_front_angular.sh
+chmod +x setup_front_react.sh
 
 # Conteúdo do setup_iaas.sh
 # --- DOCUMENTAÇÃO TÉCNICA (README) ---
@@ -76,7 +112,8 @@ chmod +x setup_front_vue.sh
 # --- Metricas sobre o projeto ---
 . setup_analyses.sh
 . setup_front_vue.sh
-
+. setup_front_angular.sh
+. setup_front_react.sh
 
 
 #curl -s "https://get.sdkman.io" | bash
@@ -122,14 +159,19 @@ for i in {1..30}; do
     sleep 2
 done
 
+# Executa o Agente AIOps
+
 # Simula tráfego inicial para o Agente Python ter dados
 echo "📈 Gerando tráfego de teste..."
 curl -s -X POST http://${PROJETO_CONF[HOST_NAME]}:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 500}' > /dev/null
 curl -s -X POST http://${PROJETO_CONF[HOST_NAME]}:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 15000}' > /dev/null
 
-# Executa o Agente AIOps
+# 1. Corrigir o ambiente virtual do Python (conforme o erro sugeriu)
+rm -rf venv
 python3 -m venv venv
+# 2. Instalar a biblioteca requests necessária para o aiops_health_agent.py
 ./venv/bin/pip install requests
+# 3. RUN AIOps
 ./venv/bin/python3 scripts/aiops_health_agent.py
 
 echo "✅ Testes de metricas realizado!"
@@ -139,12 +181,14 @@ echo "--------------------------"
 BLUE_UNDERLINE='\e[4;34m'
 RED_UNDERLINE='\e[4;31m'
 NC='\e[0m' # No Color (reseta a cor)
-echo -e "\n--- LINKS DA APLICAÇÃO Clique no link (Segure CTRL + Clique): ---"
-echo -e "API Base:   ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/api/v1/transactions${NC}"
-echo -e "Swagger UI: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/swagger-ui/index.html${NC}"
-echo -e "Prometheus: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:9090/targets${NC}"
-echo -e "Grafana: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:3000 (Login: admin / Senha: admin${NC}"
-echo -e "Vue Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4000 {NC}"
-echo -e "Actuator: ${RED_UNDERLINE}curl http://${PROJETO_CONF[HOST_NAME]}:8080/actuator/prometheus${NC}"
-echo -e "Python: ${RED_UNDERLINE}python3 scripts/aiops_health_agent.py${NC}"
+echo -e "\n--- 🚀 LINKS DA APLICAÇÃO Clique no link (Segure CTRL + Clique): ---"
+echo -e "☕API Base:   ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/api/v1/transactions${NC}"
+echo -e "📖 Swagger UI: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/swagger-ui/index.html${NC}"
+echo -e "📈 Prometheus: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:9090/targets${NC}"
+echo -e "🔥 Grafana: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:3000 (Login: admin / Senha: admin${NC}"
+echo -e "🟢 Vue Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4000${NC}"
+echo -e "🅰️ Angular Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4200${NC}"
+echo -e "⚛️ React Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4300${NC}"
+echo -e "⚙️ Actuator: ${RED_UNDERLINE}curl http://${PROJETO_CONF[HOST_NAME]}:8080/actuator/prometheus${NC}"
+echo -e "🐍 Python: ${RED_UNDERLINE}python3 scripts/aiops_health_agent.py${NC}"
 echo "--------------------------"

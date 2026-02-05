@@ -409,6 +409,34 @@ services:
       depends_on:
         - santander-api
 
+  santander-front-react:
+      build: 
+        context: ./card-system-front-react
+      container_name: santander-front-react
+      ports:
+        - "4300:4300"
+      hostname: ${PROJETO_CONF[INTERNAL_HOST]}
+      extra_hosts:
+        - "${PROJETO_CONF[INTERNAL_HOST]}:127.0.0.1"
+      environment:
+        - CHOKIDAR_USEPOLLING=true
+      networks:
+        - monitoring
+      depends_on:
+        - santander-api
+  
+  santander-front-angular:
+      build: 
+        context: ./card-system-front-angular
+        dockerfile: Dockerfile
+      container_name: santander-front-angular
+      ports:
+        - "4200:4200"
+      networks:
+        - monitoring
+      depends_on:
+        - santander-api
+
   santander-api:
     image: card-system-api:1.0
     container_name: santander-api
@@ -418,7 +446,7 @@ services:
       - monitoring
 
   prometheus:
-    image: prom/prometheus
+    image: prom/prometheus:v2.47.1
     container_name: prometheus
     user: root
     volumes:
@@ -431,7 +459,7 @@ services:
       - santander-api
 
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:10.1.5
     container_name: grafana
     user: "472"
     ports:
@@ -535,7 +563,7 @@ echo "⏳ Aguardando os Pods ficarem prontos..."
 minikube kubectl -- wait --for=condition=ready pod -l app=card-api --timeout=120s
 
 echo "✅ Ambiente pronto! Iniciando Port-Forward..."
-echo "Acesse em: http://localhost:8080"
+echo "Acesse em: http://${PROJETO_CONF[HOST_NAME]}:8080"
 
 # O port-forward bloqueia o terminal. 
 # Rodamos o comando service em background para não travar o script.

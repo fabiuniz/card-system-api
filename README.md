@@ -210,7 +210,7 @@ Exemplo de link para acesso: 🔗 https://8080xxxxxxxxxxxxxxxxxxx.run.app/swagge
 Siga os passos abaixo para conectar os dados da API ao Grafana e visualizar a saúde do sistema.
 
 ### 1. Acesso ao Grafana
-* **URL:** `http://vmlinuxd:3000`
+* **URL:** `http://localhost:3000`
 * **Credenciais:** Usuário `admin` | Senha `admin`
 
 ### 2. Configurar Fonte de Dados (Prometheus)
@@ -245,14 +245,14 @@ Caso o gráfico esteja vazio, execute o comando abaixo no terminal para simular 
 ```promql
 
 for i in {1..50}; do 
-  curl -s -X POST http://vmlinuxd:8080/api/v1/transactions   -H "Content-Type: application/json"   -d "{\"cardNumber\": \"1234\", \"amount\": $((RANDOM % 15000))}" > /dev/null
+  curl -s -X POST http://localhost:8080/api/v1/transactions   -H "Content-Type: application/json"   -d "{\"cardNumber\": \"1234\", \"amount\": $((RANDOM % 15000))}" > /dev/null
   sleep 0.5
 done
 ```
 
 ### 📊 Observabilidade Automática (IaC)
 O ambiente já está pré-configurado com **Dashboards as Code**.
-1. Acesse `http://vmlinuxd:3000` (admin/admin).
+1. Acesse `http://localhost:3000` (admin/admin).
 2. Vá em **Dashboards** e abra o item **"Santander Card System - Overview"**.
 3. Os dados das transações aparecerão automaticamente conforme o uso da API.
 
@@ -277,6 +277,10 @@ Além da observabilidade técnica, o projeto conta com uma camada de inteligênc
 **Para configurar:** Execute `./setup_analyses.sh` e siga as instruções geradas no diretório `analyses/looker/`.
 
 
+## 🎭 Camada de Frontend Multi-Framework
+
+O ecossistema foi projetado para ser agnóstico à tecnologia de interface, utilizando **Arquitetura Hexagonal** no backend para servir diferentes implementações de frontend simultaneamente.
+
 ## 🎨 Camada de Visualização (Frontend Vue.js 3)
 
 Para complementar a robustez do backend, o sistema conta com um **Dashboard Operacional** moderno, desenvolvido em **Vue.js 3** com **Vite**, focado na experiência do operador e em testes rápidos de transação.
@@ -299,7 +303,40 @@ Para complementar a robustez do backend, o sistema conta com um **Dashboard Oper
 ### No Ambiente Docker (Recomendado)
 O Frontend já faz parte do `docker-compose.yml` e subirá automaticamente junto com a stack de monitoramento:
 ```bash
-docker-compose up -d
+
+# 1. Derruba o container específico para garantir limpeza
+docker rm -f santander-front-react
+docker rm -f santander-front-angular
+docker rm -f santander-front-vue
+
+## Setup dos Frontends
+./setup_front_vue.sh
+./setup_front_angular.sh
+./setup_front_react.sh
+
+# 2. Sobe com build forçado para aplicar as mudanças do script
+docker-compose up -d --build santander-front-react
+docker-compose up -d --build santander-front-angular
+docker-compose up -d --build santander-front-vue
+```
+
+### 🟢 Dashboard Operacional (Vue.js 3)
+* **Foco**: Agilidade e Performance.
+* **Tech Stack**: Vue 3 (Composition API), Vite, Tailwind CSS.
+* **Acesso**: `http://localhost:4000`
+* **Diferencial**: Interface ultra-leve com carregamento reativo via Vite.
+
+### 🅰️ Dashboard Enterprise (Angular 16)
+* **Foco**: Robustez e Padronização.
+* **Tech Stack**: Angular 16, Standalone Components, RxJS, HttpClient.
+* **Acesso**: `http://localhost:4200`
+* **Diferencial**: Implementação seguindo padrões corporativos e tipagem rigorosa com TypeScript.
+
+### ⚛️ Dashboard Intelligence (React 18)
+* **Foco**: Flexibilidade e Ecossistema.
+* **Tech** Stack: React 18, Vite, Lucide Icons, Tailwind CSS.
+* **Acesso**: http://localhost:4300
+* **Diferencial**: Arquitetura baseada em Hooks, tratamento rigoroso de estados assíncronos e Proxy configurado para evitar latência em ambiente Docker.
 
 ---
 

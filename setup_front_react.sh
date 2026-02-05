@@ -215,24 +215,6 @@ cat <<EOF > $REACT_DIR/index.html
 </html>
 EOF
 
-# 6. ATUALIZA O DOCKER-COMPOSE.YML (ADICIONA O SERVIÇO)
-# Verifica se o serviço já existe para não duplicar
-if ! grep -q "santander-front-react" docker-compose.yml; then
-  cat <<EOF >> docker-compose.yml
-
-  santander-front-react:
-    build: 
-      context: ./card-system-front-react
-    container_name: santander-front-react
-    ports:
-      - "4300:4300"
-    networks:
-      - monitoring
-    depends_on:
-      - santander-api
-EOF
-fi
-
 chmod +x $REACT_DIR/Dockerfile
 echo "✅ Estrutura React (Vite) criada e adicionada ao docker-compose!"
 echo "🚀 Para rodar: docker-compose up -d --build santander-front-react"

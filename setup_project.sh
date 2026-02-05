@@ -132,9 +132,9 @@ for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 #mvn -version
 
 cd card-system-api
-mvn clean compile
 mvn clean package -DskipTests
-docker build -t card-system-api:1.0 .
+mvn clean compile
+#docker build -t card-system-api:1.0 .
 #docker run --rm card-system-api:1.0 java -version
 
 # --- INICIALIZAÇÃO DO STACK DE MONITORAMENTO ---

@@ -92,6 +92,7 @@ chmod +x setup_application.sh
 chmod +x setup_front_vue.sh
 chmod +x setup_front_angular.sh
 chmod +x setup_front_react.sh
+chmod +x setup_front_flutter.sh
 for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 
 # Conteúdo do setup_iaas.sh
@@ -115,6 +116,7 @@ for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 . setup_front_vue.sh
 . setup_front_angular.sh
 . setup_front_react.sh
+. setup_front_flutter.sh
 
 
 #curl -s "https://get.sdkman.io" | bash

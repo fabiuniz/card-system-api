@@ -300,7 +300,7 @@ Para complementar a robustez do backend, o sistema conta com um **Dashboard Oper
 
 ## 🏗️ Como Executar o Frontend
 
-### No Ambiente Docker (Recomendado)
+### 🐳 No Ambiente Docker (Recomendado)
 O Frontend já faz parte do `docker-compose.yml` e subirá automaticamente junto com a stack de monitoramento:
 ```bash
 
@@ -320,6 +320,20 @@ docker-compose up -d --build santander-front-angular
 docker-compose up -d --build santander-front-vue
 ```
 
+### 📱 Mobile Dashboard (Flutter)
+```bash
+Para rodar a versão mobile localmente (necessário Flutter SDK):
+
+# 1. Entre na pasta do projeto
+cd card-system-front-flutter/cardsystem
+
+# 2. Obtenha as dependências
+flutter pub get
+
+# 3. Execute em um emulador ou dispositivo físico
+flutter run.admin
+```
+
 ### 🟢 Dashboard Operacional (Vue.js 3)
 * **Foco**: Agilidade e Performance.
 * **Tech Stack**: Vue 3 (Composition API), Vite, Tailwind CSS.
@@ -337,6 +351,11 @@ docker-compose up -d --build santander-front-vue
 * **Tech** Stack: React 18, Vite, Lucide Icons, Tailwind CSS.
 * **Acesso**: http://localhost:4300
 * **Diferencial**: Arquitetura baseada em Hooks, tratamento rigoroso de estados assíncronos e Proxy configurado para evitar latência em ambiente Docker.
+
+### 💙 Mobile Experience (Flutter 3)
+* **Foco**: Portabilidade e Decisão Executiva.
+* **Tech Stack**: Flutter 3, Dart, Clean Architecture, Provider/Riverpod.
+* **Diferencial**: Interface nativa de alta performance para iOS e Android, permitindo que o gestor de SRE aprove/rejeite limites críticos ou visualize o gráfico de AIOps diretamente do celular.
 
 ---
 

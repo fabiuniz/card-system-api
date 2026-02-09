@@ -471,6 +471,101 @@ services:
     depends_on:
       - prometheus
 
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin
+      - MONGO_INITDB_DATABASE=card_system
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d:ro # Onde colocaremos o script .js
+    networks:
+      - monitoring
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    ports:
+      - "8082:8081"
+    environment:
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=admin
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:admin@mongodb:27017/
+    networks:
+      - monitoring
+    depends_on:
+      - mongodb
+
+  mysqldb:
+    image: mysql:8.0
+    container_name: mysqldb
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=admin
+      - MYSQL_DATABASE=santander_system
+      - MYSQL_USER=fabiano
+      - MYSQL_PASSWORD=admin
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro # Scripts SQL de inicialização
+    networks:
+      - monitoring
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest  # Nome exato da imagem no seu 'docker images'
+    container_name: phpmyadmin
+    restart: always
+    ports:
+      - "8083:80"
+    environment:
+      - PMA_HOST=mysqldb
+      - MYSQL_ROOT_PASSWORD=admin
+      - PMA_ARBITRARY=1
+    networks:
+      - monitoring
+    depends_on:
+      - mysqldb
+
+  postgresdb:
+    image: postgres:14-alpine
+    container_name: postgresdb
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=santander_system
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - monitoring
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: always
+    ports:
+      - "8084:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      # Importa o servidor automaticamente
+      - ./pgadmin-config/servers.json:/pgadmin4/servers.json:ro
+      # Importa a senha para não pedir ao clicar no servidor
+      - ./pgadmin-config/pgpassfile:/tmp/pgpassfile:ro
+    networks:
+      - monitoring
+    depends_on:
+      - postgresdb
+
 networks:
   monitoring:
     driver: bridge # Docker cria a rede automaticamente se não existir

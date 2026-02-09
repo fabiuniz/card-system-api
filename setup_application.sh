@@ -31,27 +31,6 @@ cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.js
 }
 EOF
 
-cd ${PROJETO_CONF[PROJECT_NAME]}
-
-# --- CONFIGURAÇÃO ACTUATOR (application.yml) ---
-cat <<EOF > src/main/resources/application.yml
-spring:
-  application:
-    name: card-system-platform
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "health,metrics,prometheus"
-      cors:
-        allowed-origins: "*"
-        allowed-methods: "*"
-        allowed-headers: "*"
-  endpoint:
-    health:
-      show-details: always
-EOF
-
 mkdir -p ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/security
 cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/security/SecurityConfig.java
 package com.fabiano.cardsystem.infrastructure.security;
@@ -222,7 +201,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 
-@SpringBootApplication(exclude = {DataSourceAutoConfiguration.class })
+
 public class CardSystemApplication {
     public static void main(String[] args) {
         SpringApplication.run(CardSystemApplication.class, args);
@@ -286,6 +265,15 @@ cat <<EOF > pom.xml
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-mongodb</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
   <build>

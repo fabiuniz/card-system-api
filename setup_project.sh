@@ -82,12 +82,15 @@ mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,application/{service,port
 mkdir -p monitoring/{prometheus,grafana/provisioning/{datasources,dashboards},nginx}
 # c. INFRAESTRUTURA & CLOUD (IaaS, K8s, Terraform)
 mkdir -p {.idx,k8s,terraform}
+# Databases
+mkdir -p {./postgres-init,./init-db,./mysql-init,./pgadmin-config}
 # d. CI/CD & RECURSOS (GitHub, Scripts, Resources)
 mkdir -p {.github/workflows,scripts,src/main/resources}
 # Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
 chmod -R 777 monitoring/grafana
 chmod -R 777 monitoring/prometheus
 chmod +x setup_iaas.sh
+chmod +x setup_databases.sh 
 chmod +x setup_application.sh 
 chmod +x setup_front_vue.sh
 chmod +x setup_front_angular.sh
@@ -110,6 +113,7 @@ for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 # --- DOCKER COMPOSE ---
 # --- TOOL SCRIPT DE LIMPEZA ---
 . setup_iaas.sh
+. setup_databases.sh
 . setup_application.sh
 # --- Metricas sobre o projeto ---
 . setup_analyses.sh
@@ -189,6 +193,9 @@ echo -e "☕API Base:   ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/
 echo -e "📖 Swagger UI: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/swagger-ui/index.html${NC}"
 echo -e "📈 Prometheus: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:9090/targets${NC}"
 echo -e "🔥 Grafana: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:3000 (Login: admin / Senha: admin${NC}"
+echo -e "🍃 MongoDb: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8082 (Login: admin / Senha: admin${NC}"
+echo -e "🐬 Mysql: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8083 (servidor:mysqldb Login: root / Senha: admin${NC}"
+echo -e "🐘 Postgres:  ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8084 (admin@admin.com / admin)${NC}"
 echo -e "🟢 Vue Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4000${NC}"
 echo -e "🅰️ Angular Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4200${NC}"
 echo -e "⚛️ React Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4300${NC}"

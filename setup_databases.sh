@@ -1,5 +1,26 @@
 cd ${PROJETO_CONF[PROJECT_NAME]}
 
+
+src/main/resources
+cat <<EOF > src/main/resources/application-postgres.properties
+spring.datasource.url=jdbc:postgresql://postgresdb:5432/santander_system
+spring.datasource.username=admin
+spring.datasource.password=admin
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+database.target=postgres
+EOF
+cat <<EOF > src/main/resources/application-mysql.properties
+spring.datasource.url=jdbc:mysql://mysqldb:3306/santander_system?createDatabaseIfNotExist=true
+spring.datasource.username=root
+spring.datasource.password=admin
+spring.jpa.database-platform=org.hibernate.dialect.MySQL8Dialect
+database.target=mysql
+EOF
+cat <<EOF > src/main/resources/application-mongodb.properties
+spring.data.mongodb.uri=mongodb://admin:admin@mongodb:27017/santander_audit?authSource=admin
+database.target=mongodb
+EOF
+
 #Postgress
 
 rm -rf ./postgres-init ./pgadmin-config
@@ -49,7 +70,7 @@ chmod 600 ./pgadmin-config/pgpassfile
 # Garante que o JSON seja legível
 chmod 644 ./pgadmin-config/servers.json
 
-#Mysql
+#MongoDB
 
 cat <<EOF > ./init-db/init.js
 db = db.getSiblingDB('card_system');
@@ -71,6 +92,26 @@ db.transactions.insertMany([
   }
 ]);
 print("✅ Banco 'card_system' inicializado com dados de teste!");
+EOF
+
+# MySql
+mkdir -p ./mysql-init
+
+cat <<EOF > ./mysql-init/init.sql
+CREATE DATABASE IF NOT EXISTS santander_system;
+USE santander_system;
+
+CREATE TABLE IF NOT EXISTS transactions (
+    transaction_id VARCHAR(50) PRIMARY KEY,
+    card_number VARCHAR(20) NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO transactions (transaction_id, card_number, amount, status) 
+VALUES ('mysql-seed-001', '4444555566667777', 150.75, 'APPROVED'),
+       ('mysql-seed-002', '1111222233334444', 10.00, 'REJECTED');
 EOF
 
 # --- CONFIGURAÇÃO ACTUATOR (application.yml) ---
@@ -117,4 +158,33 @@ management:
       show-details: always
 EOF
 
-echo "✅ Ambiente database pronto!
+cat <<EOF > clearfolder.sh
+clear
+rm -rf ../card-system-api
+mkdir ../card-system-api
+chmod -R 777 ../card-system-api
+cd ../card-system-api
+EOF
+
+cat <<EOF > testedb.sh
+#!/bin/bash
+docker logs santander-api
+echo -e "MongoDB🍃"
+docker exec -it mongodb mongosh -u admin -p admin --authenticationDatabase admin --eval "db.getSiblingDB('santander_audit').transaction_audit.find()"
+echo -e "MySql🐬"
+docker exec -it mysqldb mysql -u root -padmin -D santander_system -e "SELECT * FROM transactions;"
+echo -e "Postgree🐘"
+docker exec -it postgresdb psql -U admin -d santander_system -c "SELECT * FROM transactions ORDER BY transaction_id DESC;"
+EOF
+
+echo "✅ Ambiente database pronto!"
+
+echo "Para usar MySQL: export DB_SWITCH=mysql docker-compose up -d santander-api"
+echo "Para usar MongoDB: export DB_SWITCH=mongodb docker-compose up -d santander-api"
+echo "Para usar Postgres (padrão): export DB_SWITCH=postgres docker-compose up -d santander-api"
+
+
+echo 'docker exec -it postgresdb psql -U admin -d santander_system -c "SELECT * FROM transactions ORDER BY transaction_id DESC;"'
+echo 'docker exec -it mysqldb mysql -u root -padmin -D santander_system -e "SELECT * FROM transactions;"'
+echo 'docker exec -it mongodb mongosh -u admin -p admin --authenticationDatabase admin --eval "db.getSiblingDB('santander_audit').transaction_audit.find()"'
+echo 'docker logs santander-api'

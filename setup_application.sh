@@ -75,22 +75,21 @@ import com.fabiano.cardsystem.application.ports.out.TransactionOutputPort;
 import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
 import com.fabiano.cardsystem.domain.model.Transaction;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 import java.util.UUID;
 
 @Service
 public class TransactionService implements ProcessTransactionUseCase {
 
     private final TransactionOutputPort metricsPort;
-    private final TransactionPersistencePort persistencePort;
+    private final List<TransactionPersistencePort> persistencePorts; // Injeta TODOS os bancos
 
-    public TransactionService(TransactionOutputPort metricsPort, TransactionPersistencePort persistencePort) {
+    public TransactionService(TransactionOutputPort metricsPort, List<TransactionPersistencePort> persistencePorts) {
         this.metricsPort = metricsPort;
-        this.persistencePort = persistencePort;
+        this.persistencePorts = persistencePorts;
     }
 
     @Override
-    @Transactional
     public Transaction execute(Transaction transaction) {
         transaction.setTransactionId(UUID.randomUUID().toString());
         
@@ -102,8 +101,13 @@ public class TransactionService implements ProcessTransactionUseCase {
             metricsPort.reportApproval();
         }
 
-        System.out.println("🚀 [Service] Enviando para persistência: " + transaction.getTransactionId());
-        return persistencePort.save(transaction);
+        // SALVA EM TODOS OS ADAPTADORES ATIVOS (MySQL, Postgres, Mongo)
+        persistencePorts.forEach(port -> {
+            System.out.println("🚀 [Service] Persistindo via: " + port.getClass().getSimpleName());
+            port.save(transaction);
+        });
+
+        return transaction;
     }
 }
 EOF
@@ -211,10 +215,12 @@ package com.fabiano.cardsystem;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.ComponentScan;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
 
 @SpringBootApplication
-@ComponentScan(basePackages = "com.fabiano.cardsystem") // ISSO AQUI É A CHAVE
+@EnableJpaRepositories(basePackages = "com.fabiano.cardsystem.infrastructure.persistence.repository")
+@EnableMongoRepositories(basePackages = "com.fabiano.cardsystem.adapters.out.persistence")
 public class CardSystemApplication {
     public static void main(String[] args) {
         SpringApplication.run(CardSystemApplication.class, args);
@@ -494,14 +500,12 @@ import com.fabiano.cardsystem.domain.model.Transaction;
 import com.fabiano.cardsystem.infrastructure.persistence.entity.TransactionEntity;
 import com.fabiano.cardsystem.infrastructure.persistence.repository.TransactionRepository;
 import org.springframework.stereotype.Component;
-import org.springframework.context.annotation.Primary;
+// Removido o import do Profile
 
 @Component
-@Primary
 public class TransactionPostgresAdapter implements TransactionPersistencePort {
-
     private final TransactionRepository repository;
-
+    
     public TransactionPostgresAdapter(TransactionRepository repository) {
         this.repository = repository;
     }
@@ -514,11 +518,83 @@ public class TransactionPostgresAdapter implements TransactionPersistencePort {
         entity.setAmount(transaction.getAmount());
         entity.setStatus(transaction.getStatus());
         
+        System.out.println("🐘 [Postgres] Persistindo: " + transaction.getTransactionId());
         repository.save(entity);
         return transaction;
     }
 }
 EOF
+
+# Adaptador MongoDB  FUNCIONAL
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/out/persistence/TransactionMongoAdapter.java
+package com.fabiano.cardsystem.adapters.out.persistence;
+
+import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
+import com.fabiano.cardsystem.domain.model.Transaction;
+import com.fabiano.cardsystem.infrastructure.persistence.document.TransactionDocument;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
+
+@Repository
+interface MongoTransactionRepository extends MongoRepository<TransactionDocument, String> { }
+
+@Component
+public class TransactionMongoAdapter implements TransactionPersistencePort {
+    private final MongoTransactionRepository repository;
+    public TransactionMongoAdapter(MongoTransactionRepository repository) { this.repository = repository; }
+
+    @Override
+    public Transaction save(Transaction transaction) {
+        TransactionDocument doc = new TransactionDocument();
+        doc.setTransactionId(transaction.getTransactionId());
+        doc.setCardNumber(transaction.getCardNumber());
+        doc.setAmount(transaction.getAmount());
+        doc.setStatus(transaction.getStatus());
+        repository.save(doc);
+        return transaction;
+    }
+}
+EOF
+
+# Adaptador MySQL FUNCIONAL
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/adapter/TransactionMySQLAdapter.java
+package com.fabiano.cardsystem.infrastructure.persistence.adapter;
+
+import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
+import com.fabiano.cardsystem.domain.model.Transaction;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.stereotype.Component;
+
+@Component
+public class TransactionMySQLAdapter implements TransactionPersistencePort {
+    
+    private final JdbcTemplate jdbcTemplate;
+
+    public TransactionMySQLAdapter() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        dataSource.setUrl("jdbc:mysql://mysqldb:3306/santander_system");
+        dataSource.setUsername("root");
+        dataSource.setPassword("admin");
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
+    }
+
+    @Override
+    public Transaction save(Transaction transaction) {
+        String sql = "INSERT INTO transactions (transaction_id, card_number, amount, status, created_at) VALUES (?, ?, ?, ?, NOW())";
+        jdbcTemplate.update(sql, 
+            transaction.getTransactionId(), 
+            transaction.getCardNumber(), 
+            transaction.getAmount(), 
+            transaction.getStatus());
+        System.out.println("🐬 [MySQL/JDBC] Persistido com sucesso!");
+        return transaction;
+    }
+}
+EOF
+
 
 # 6. Criar o Adaptador MongoDB (Ativado via application.yml)
 cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/out/persistence/TransactionMongoAdapter.java
@@ -526,21 +602,32 @@ package com.fabiano.cardsystem.adapters.out.persistence;
 
 import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
 import com.fabiano.cardsystem.domain.model.Transaction;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import com.fabiano.cardsystem.infrastructure.persistence.document.TransactionDocument;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Component;
 
+@Repository
+interface MongoTransactionRepository extends MongoRepository<TransactionDocument, String> { }
+
 @Component
-@ConditionalOnProperty(name = "database.target", havingValue = "mongodb")
 public class TransactionMongoAdapter implements TransactionPersistencePort {
+    private final MongoTransactionRepository repository;
+    public TransactionMongoAdapter(MongoTransactionRepository repository) { this.repository = repository; }
+
     @Override
     public Transaction save(Transaction transaction) {
-        System.out.println("🍃 [MongoDB] Auditando transação: " + transaction.getTransactionId());
+        TransactionDocument doc = new TransactionDocument();
+        doc.setTransactionId(transaction.getTransactionId());
+        doc.setCardNumber(transaction.getCardNumber());
+        doc.setAmount(transaction.getAmount());
+        doc.setStatus(transaction.getStatus());
+        System.out.println("🍃 [MongoDB] Persistindo: " + transaction.getTransactionId());
+        repository.save(doc);
         return transaction;
     }
 }
 EOF
-
-
 
 # Criando a interface de repositório JPA
 # Remova o antigo para evitar duplicidade

@@ -1,11 +1,11 @@
 <!-- 
-  Tags: DevOps,Iac
+  Tags: DevOps,DevOps,Iac , Dev , Dev, Dev, Dev  
   Label: 💳 Card System Platform - Santander/F1RST Evolution
   Description:⭐ Microserviço focado no processamento de transações de cartões
   technical_requirement: Java 11, Spring Boot 2.7, Spring Data JPA, Hibernate, MySQL, Docker, Maven, JUnit 5, Hexagonal Architecture, SOLID, Clean Architecture, REST API, Global Exception Handling, Bean Validation, Bash Scripting, Linux (Debian), Git, GitFlow, Amazon Corretto, Multi-stage builds, CI/CD, GitHub Actions, SRE, Troubleshooting, Cloud Computing.
-  path_hook: hookfigma.hook18,hookfigma.hook20
+  path_hook: hookfigma.hook18,hookfigma.hook6,hookfigma.hook20,hookfigma.hook7,hookfigma.hook8,hookfigma.hook11, hookfigma.hook16
 -->
-# 💳 Card System Platform - Santander/F1RST Evolution
+# 💳 Card System Platform - Santander/F1RST Evolution (Full Cycle)
 
 ![Fluxo do Sistema](images/fluxo.png)
 

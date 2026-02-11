@@ -31,20 +31,24 @@ cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.js
 }
 EOF
 
-mkdir -p ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/security
-cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/security/SecurityConfig.java
+cat <<EOF > src/main/java/com/fabiano/cardsystem/infrastructure/security/SecurityConfig.java
 package com.fabiano.cardsystem.infrastructure.security;
 
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.web.cors.CorsConfiguration;
 import java.util.List;
+
 @Configuration
-public class SecurityConfig {
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+@EnableWebSecurity
+@Order(1)
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
         http.csrf().disable()
             .cors().configurationSource(request -> {
                 CorsConfiguration config = new CorsConfiguration();
@@ -56,7 +60,6 @@ public class SecurityConfig {
             .and()
             .authorizeRequests()
             .antMatchers("/**").permitAll();
-        return http.build();
     }
 }
 EOF
@@ -64,22 +67,33 @@ EOF
 # removido cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/application/service/TransactionMetrics.java
 
 
-cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/application/service/TransactionService.java
+cat <<EOF > "${PROJETO_CONF[PACKAGE_PATH]}/application/service/TransactionService.java"
 package com.fabiano.cardsystem.application.service;
+
 import com.fabiano.cardsystem.application.ports.in.ProcessTransactionUseCase;
 import com.fabiano.cardsystem.application.ports.out.TransactionOutputPort;
+import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
 import com.fabiano.cardsystem.domain.model.Transaction;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
+
 @Service
 public class TransactionService implements ProcessTransactionUseCase {
+
     private final TransactionOutputPort metricsPort;
-    public TransactionService(TransactionOutputPort metricsPort) {
+    private final TransactionPersistencePort persistencePort;
+
+    public TransactionService(TransactionOutputPort metricsPort, TransactionPersistencePort persistencePort) {
         this.metricsPort = metricsPort;
+        this.persistencePort = persistencePort;
     }
+
     @Override
+    @Transactional
     public Transaction execute(Transaction transaction) {
-        // Regra de Negócio: Limite de R$ 10.000
+        transaction.setTransactionId(UUID.randomUUID().toString());
+        
         if (transaction.getAmount().doubleValue() > 10000) {
             transaction.setStatus("REJECTED");
             metricsPort.reportRejection();
@@ -87,8 +101,9 @@ public class TransactionService implements ProcessTransactionUseCase {
             transaction.setStatus("APPROVED");
             metricsPort.reportApproval();
         }
-        transaction.setTransactionId(UUID.randomUUID().toString());
-        return transaction;
+
+        System.out.println("🚀 [Service] Enviando para persistência: " + transaction.getTransactionId());
+        return persistencePort.save(transaction);
     }
 }
 EOF
@@ -100,7 +115,7 @@ import com.fabiano.cardsystem.domain.model.Transaction;
 import com.fabiano.cardsystem.application.ports.in.ProcessTransactionUseCase;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
-import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/transactions")
 public class TransactionController {
@@ -111,10 +126,7 @@ public class TransactionController {
     }
     @PostMapping
     public ResponseEntity<?> process(@RequestBody Transaction transaction) {
-        if (transaction.getAmount() == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Amount is required"));
-        }
-        // Delegamos TODA a lógica de negócio e métricas para o Service
+        // Agora o Controller chama o Service, que faz TUDO (Métricas + Banco)
         Transaction result = processTransactionUseCase.execute(transaction);
         if ("REJECTED".equals(result.getStatus())) {
             return ResponseEntity.status(422).body(result);
@@ -199,9 +211,10 @@ package com.fabiano.cardsystem;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.context.annotation.ComponentScan;
 
-
+@SpringBootApplication
+@ComponentScan(basePackages = "com.fabiano.cardsystem") // ISSO AQUI É A CHAVE
 public class CardSystemApplication {
     public static void main(String[] args) {
         SpringApplication.run(CardSystemApplication.class, args);
@@ -310,23 +323,8 @@ public class Transaction {
 }
 EOF
 
-# 4. Criar a Main Class do Spring Boot
-cat <<EOF > src/main/java/com/fabiano/cardsystem/CardSystemApplication.java
-package com.fabiano.cardsystem;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 
-@SpringBootApplication(exclude = {DataSourceAutoConfiguration.class })
-public class CardSystemApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(CardSystemApplication.class, args);
-    }
-}
-EOF
-
-# Criando a Porta de Entrada
 cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/application/ports/in/ProcessTransactionUseCase.java
 package com.fabiano.cardsystem.application.ports.in;
 import com.fabiano.cardsystem.domain.model.Transaction;
@@ -370,7 +368,6 @@ public class TransactionMetricsAdapter implements TransactionOutputPort {
 EOF
 
 # Cria todas as pastas de uma vez
-mkdir -p src/main/java/com/fabiano/cardsystem/adapters/in/web/exception
 
 # Agora cria o arquivo dentro delas
 cat <<EOF > src/main/java/com/fabiano/cardsystem/adapters/in/web/exception/GlobalExceptionHandler.java
@@ -395,7 +392,6 @@ public class GlobalExceptionHandler {
     }
 }
 EOF
-mkdir -p src/test/java/com/fabiano/cardsystem/domain/model
 cat <<EOF > src/test/java/com/fabiano/cardsystem/domain/model/TransactionTest.java
 package com.fabiano.cardsystem.domain.model;
 
@@ -411,59 +407,179 @@ class TransactionTest {
 }
 EOF
 
-mkdir -p src/main/java/com/fabiano/cardsystem/adapters/in/web
-cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/in/web/TransactionController.java
-package com.fabiano.cardsystem.adapters.in.web;
+
+# 1. Criar estrutura de diretórios para Persistência
+
+# 2. Criar a Porta de Saída de Persistência (Interface agnóstica)
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/application/ports/out/TransactionPersistencePort.java
+package com.fabiano.cardsystem.application.ports.out;
 
 import com.fabiano.cardsystem.domain.model.Transaction;
-import com.fabiano.cardsystem.application.ports.out.TransactionOutputPort;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.http.ResponseEntity;
-import java.util.Map;
-import java.util.UUID;
 
-@RestController
-@RequestMapping("/api/v1/transactions")
-public class TransactionController {
-    private final TransactionOutputPort metricsPort;
+public interface TransactionPersistencePort {
+    Transaction save(Transaction transaction);
+}
+EOF
 
-    public TransactionController(TransactionOutputPort metricsPort) {
-        this.metricsPort = metricsPort;
+# 3. Criar a Entidade JPA (Postgres)
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/entity/TransactionEntity.java
+package com.fabiano.cardsystem.infrastructure.persistence.entity;
+
+import javax.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "transactions")
+public class TransactionEntity {
+    @Id
+    @Column(name = "transaction_id") // Crucial para o JPA encontrar a coluna certa
+    private String transactionId;
+    
+    @Column(name = "card_number")
+    private String cardNumber;
+    
+    private BigDecimal amount;
+    private String status;
+    
+    @Column(name = "created_at", insertable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    public TransactionEntity() {}
+    public String getTransactionId() { return transactionId; }
+    public void setTransactionId(String id) { this.transactionId = id; }
+    public String getCardNumber() { return cardNumber; }
+    public void setCardNumber(String cn) { this.cardNumber = cn; }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amt) { this.amount = amt; }
+    public String getStatus() { return status; }
+    public void setStatus(String st) { this.status = st; }
+}
+EOF
+
+# 4. Criar o Documento MongoDB
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/document/TransactionDocument.java
+package com.fabiano.cardsystem.infrastructure.persistence.document;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import java.math.BigDecimal;
+
+@Document(collection = "transaction_audit")
+public class TransactionDocument {
+    @Id
+    private String transactionId;
+    private String cardNumber;
+    private BigDecimal amount;
+    private String status;
+
+    public TransactionDocument() {}
+    public String getTransactionId() { return transactionId; }
+    public void setTransactionId(String id) { this.transactionId = id; }
+    public String getCardNumber() { return cardNumber; }
+    public void setCardNumber(String cn) { this.cardNumber = cn; }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amt) { this.amount = amt; }
+    public String getStatus() { return status; }
+    public void setStatus(String st) { this.status = st; }
+}
+EOF
+
+# 5. Adaptador Postgres FUNCIONAL
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/adapter/TransactionPostgresAdapter.java
+package com.fabiano.cardsystem.infrastructure.persistence.adapter;
+
+import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
+import com.fabiano.cardsystem.domain.model.Transaction;
+import com.fabiano.cardsystem.infrastructure.persistence.entity.TransactionEntity;
+import com.fabiano.cardsystem.infrastructure.persistence.repository.TransactionRepository;
+import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Primary;
+
+@Component
+@Primary
+public class TransactionPostgresAdapter implements TransactionPersistencePort {
+
+    private final TransactionRepository repository;
+
+    public TransactionPostgresAdapter(TransactionRepository repository) {
+        this.repository = repository;
     }
 
-    @PostMapping
-    public ResponseEntity<?> process(@RequestBody Transaction transaction) {
-        if (transaction.getAmount() == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Amount is required"));
-        }
-
-        if (transaction.getAmount().doubleValue() > 10000) {
-            metricsPort.reportRejection();
-            return ResponseEntity.status(422).body(Map.of(
-                "status", "REJECTED",
-                "reason", "Limit exceeded",
-                "transactionId", UUID.randomUUID().toString()
-            ));
-        }
-
-        metricsPort.reportApproval();
-        return ResponseEntity.ok(Map.of(
-            "status", "APPROVED",
-            "transactionId", UUID.randomUUID().toString()
-        ));
+    @Override
+    public Transaction save(Transaction transaction) {
+        TransactionEntity entity = new TransactionEntity();
+        entity.setTransactionId(transaction.getTransactionId());
+        entity.setCardNumber(transaction.getCardNumber());
+        entity.setAmount(transaction.getAmount());
+        entity.setStatus(transaction.getStatus());
+        
+        repository.save(entity);
+        return transaction;
     }
 }
 EOF
 
+# 6. Criar o Adaptador MongoDB (Ativado via application.yml)
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/out/persistence/TransactionMongoAdapter.java
+package com.fabiano.cardsystem.adapters.out.persistence;
+
+import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
+import com.fabiano.cardsystem.domain.model.Transaction;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+@Component
+@ConditionalOnProperty(name = "database.target", havingValue = "mongodb")
+public class TransactionMongoAdapter implements TransactionPersistencePort {
+    @Override
+    public Transaction save(Transaction transaction) {
+        System.out.println("🍃 [MongoDB] Auditando transação: " + transaction.getTransactionId());
+        return transaction;
+    }
+}
+EOF
+
+
+
+# Criando a interface de repositório JPA
+# Remova o antigo para evitar duplicidade
+rm -f ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/repository/PostgresTransactionRepository.java
+
+# Crie com o nome correto esperado pelo Adapter
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/repository/TransactionRepository.java
+package com.fabiano.cardsystem.infrastructure.persistence.repository;
+
+import com.fabiano.cardsystem.infrastructure.persistence.entity.TransactionEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface TransactionRepository extends JpaRepository<TransactionEntity, String> {
+}
+EOF
+
+echo "✅ Camada de persistência poliglota configurada com sucesso!"
 # 5. Inicializar Git e Primeiro Commit
 #echo "📦 Inicializando repositório Git..."
 #git init
 cat <<EOF > .gitignore
 target/
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+# Java/Maven
 .mvn/
 .idea/
 *.class
 .DS_Store
+*.jar
+*.war
+# Infra/Minikube
+*.tar
+minikube-linux-amd64
 EOF
 
 #git add .

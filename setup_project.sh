@@ -51,6 +51,8 @@ PROJETO_CONF=(
   [NOME]="Fabiano"
 )
 
+export PROJECT_ROOT="$(pwd)/${PROJETO_CONF[PROJECT_NAME]}"
+
 # 3. Faz a atribuição dinâmica (Sincroniza URL com o Host)
 # PROJETO_CONF[HOST_NAME]='localhost'
 PROJETO_CONF[URL_FIREBASE]=${PROJETO_CONF[HOST_NAME]}
@@ -77,7 +79,12 @@ echo "🚀 Iniciando criação do projeto ${PROJETO_CONF[PROJECT_NAME]}..."
 # 1. Criar estrutura de pastas (REMOVIDO o ${PROJETO_CONF[PROJECT_NAME]} do caminho inicial)
 # Cria toda a estrutura de uma vez, sem repetições
 # a. CORE DA APLICAÇÃO (Arquitetura Hexagonal Java)
-mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,application/{service,ports/{in,out}},adapters/{in/web/exception,out/{persistence,metrics}},infrastructure/{security,config}}
+rm -f ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/repository/PostgresTransactionRepository.java
+mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,\
+application/{service,ports/{in,out}},\
+adapters/{in/web/exception,out/{persistence,metrics}},\
+infrastructure/{security,config,persistence/{entity,document,repository,adapter}}} \
+src/test/java/com/fabiano/cardsystem/domain/model
 # b. OBSERVABILIDADE (Prometheus, Grafana, Nginx)
 mkdir -p monitoring/{prometheus,grafana/provisioning/{datasources,dashboards},nginx}
 # c. INFRAESTRUTURA & CLOUD (IaaS, K8s, Terraform)
@@ -137,9 +144,9 @@ for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 #sdk install maven
 #mvn -version
 
-cd card-system-api
+echo "🔨 Iniciando Build da aplicação..."
 mvn clean package -DskipTests
-mvn clean compile
+echo "🐳 Gerando imagem Docker..."
 #docker build -t card-system-api:1.0 .
 #docker run --rm card-system-api:1.0 java -version
 
@@ -202,3 +209,5 @@ echo -e "⚛️ React Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME
 echo -e "⚙️ Actuator: ${RED_UNDERLINE}curl http://${PROJETO_CONF[HOST_NAME]}:8080/actuator/prometheus${NC}"
 echo -e "🐍 Python: ${RED_UNDERLINE}python3 scripts/aiops_health_agent.py${NC}"
 echo "--------------------------"
+
+echo 'start chrome --incognito "https://gemini.google.com/" "http://vmlinuxd:8081" "http://vmlinuxd:3000" "http://vmlinuxd:9090/targets" "http://vmlinuxd:8080/swagger-ui/index.html" "http://vmlinuxd:4000" "http://vmlinuxd:4200" "http://vmlinuxd:4300" "http://vmlinuxd:8082" "http://vmlinuxd:8083" "http://vmlinuxd:8084"'

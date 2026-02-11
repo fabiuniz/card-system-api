@@ -8,16 +8,16 @@ mkdir -p ./postgres-init ./pgadmin-config
 # 3. SQL de inicialização do Postgres
 cat <<EOF > ./postgres-init/setup.sql
 CREATE TABLE IF NOT EXISTS transactions (
-    id SERIAL PRIMARY KEY,
+    transaction_id VARCHAR(50) PRIMARY KEY,
     card_number VARCHAR(20) NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     status VARCHAR(20) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO transactions (card_number, amount, status) 
-VALUES ('5555444433332222', 250.50, 'APPROVED'),
-       ('9999888877776666', 1200.00, 'REJECTED');
+INSERT INTO transactions (transaction_id, card_number, amount, status) 
+VALUES ('seed-001', '5555444433332222', 250.50, 'APPROVED'),
+       ('seed-002', '9999888877776666', 1200.00, 'REJECTED');
 EOF
 
 # 4. Configuração do pgAdmin (JSON de Servidores)
@@ -86,6 +86,22 @@ spring:
     username: admin
     password: admin
     driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect # Mais direto para o Spring
+    show-sql: true
+    hibernate:
+      ddl-auto: create
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE 
+
+database:
+  target: postgres # Gatilho para o seu Adapter
 
 management:
   endpoints:

@@ -567,6 +567,27 @@ services:
     depends_on:
       - postgresdb
 
+  #ollama-server:
+  #  image: ollama/ollama:latest
+  #  container_name: ollama-server
+  #  ports:
+  #    - "11434:11434"
+  #  volumes:
+  #    - ./aiops/ollama_config:/root/.ollama
+  #  networks:
+  #    - monitoring
+
+  #ai-agent:
+  #  build: ./aiops
+  #  container_name: ai-agent
+  #  depends_on:
+  #    - ollama-server
+  #  volumes:
+  #    - ./aiops/brain:/app/brain
+  #    - ./aiops/vector_db:/app/vector_db
+  #  networks:
+  #    - monitoring      
+
 networks:
   monitoring:
     driver: bridge # Docker cria a rede automaticamente se não existir

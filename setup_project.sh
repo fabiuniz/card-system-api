@@ -98,6 +98,10 @@ mkdir -p {.idx,k8s,terraform}
 mkdir -p {postgres-init,mysql-init,mongo-init,pgadmin-config}
 # d. CI/CD & RECURSOS
 mkdir -p {.github/workflows,scripts,src/main/resources}
+#IoT
+mkdir -p {iot/esp01_monitor/}
+#IA
+mkdir -p {aiops/brain,aiops/vector_db,aiops/config}
 echo "✅ Estrutura de pastas higienizada!"
 # Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
 chmod -R 777 monitoring/grafana
@@ -110,6 +114,8 @@ chmod +x setup_front_vue.sh
 chmod +x setup_front_angular.sh
 chmod +x setup_front_react.sh
 chmod +x setup_front_flutter.sh
+chmod +x setup_iot.sh
+chmod +x setup_ollama.sh
 for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 
 # Conteúdo do setup_iaas.sh
@@ -136,7 +142,8 @@ for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 . setup_front_angular.sh
 . setup_front_react.sh
 . setup_front_flutter.sh
-
+. setup_iot.sh
+. setup_ollama.sh
 
 #curl -s "https://get.sdkman.io" | bash
 #source "$HOME/.sdkman/bin/sdkman-init.sh"

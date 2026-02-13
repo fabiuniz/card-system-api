@@ -1,9 +1,9 @@
 <!-- 
-  Tags: DevOps,DevOps,Iac , Dev , Dev, Dev, Dev  
+  Tags: DevOps,DevOps,Iac , Dev , Dev, Dev, Dev ,IoT ,DadosIA
   Label: 💳 Card System Platform - Santander/F1RST Evolution
   Description:⭐ Microserviço focado no processamento de transações de cartões
   technical_requirement: Java 11, Spring Boot 2.7, Spring Data JPA, Hibernate, MySQL, Docker, Maven, JUnit 5, Hexagonal Architecture, SOLID, Clean Architecture, REST API, Global Exception Handling, Bean Validation, Bash Scripting, Linux (Debian), Git, GitFlow, Amazon Corretto, Multi-stage builds, CI/CD, GitHub Actions, SRE, Troubleshooting, Cloud Computing.
-  path_hook: hookfigma.hook18,hookfigma.hook6,hookfigma.hook20,hookfigma.hook7,hookfigma.hook8,hookfigma.hook11, hookfigma.hook16
+  path_hook: hookfigma.hook18,hookfigma.hook6,hookfigma.hook20,hookfigma.hook7,hookfigma.hook8,hookfigma.hook11, hookfigma.hook16,hookfigma.hook4,hookfigma.hook2
 -->
 # 💳 Card System Platform - Santander/F1RST Evolution (Full Cycle)
 
@@ -129,6 +129,34 @@ Para complementar a robustez do backend, o sistema conta com um **Dashboard Oper
 * **Legacy Support (MySQL)**: Mantido como base legada para simulação de cenários de migração e integração.
 
 ---
+
+## 🚥 Monitoramento Visual IoT (Edge Computing)
+Integração de hardware para telemetria visual fora da tela (Zero-Dashboard approach).
+- **Hardware**: Microcontrolador **ESP8266 (ESP-01)**.
+- **Funcionalidade**: O módulo consome o endpoint `/actuator/health` via Wi-Fi e traduz o status do sistema em sinais luminosos (LED RGB):
+  - 🔵 **Ciano**: Sistema nominal (Santander Digital Style).
+  - 🔴 **Vermelho**: Falha crítica detectada pelo Spring Boot.
+  - 🟣 **Roxo**: Erro de conectividade de rede.
+
+---
+
+## 🧠 Camada de Inteligência Preditiva (AIOps)
+O sistema conta com um **Agente Preditivo SRE** baseado em **RAG (Retrieval-Augmented Generation)**, projetado para atuar como um co-piloto na resolução de incidentes.
+
+- **Engine**: Ollama rodando **Llama 3 (8B)** ou **Phi-3**.
+- **Contexto RAG**: Base de conhecimento em `aiops/brain` (arquivos .md) que ensina a IA os procedimentos operacionais padrão (SOP) do Santander.
+- **Vetorização**: Uso de **ChromaDB** para busca semântica de soluções baseadas em métricas do Prometheus.
+- **Fine-Tuning em Tempo Real**: Script `add_knowledge.sh` para alimentar o cérebro da IA com novos aprendizados de troubleshooting.
+
+---
+
+## ⚠️ Notas de Implementação e Hardware
+Devido à alta densidade computacional da stack (3 Bancos de Dados + 4 Frontends + IA + Monitoramento), as seguintes diretrizes foram adotadas:
+- **Resiliência de Host**: Os serviços de IA (`ollama-server` e `ai-agent`) estão configurados e prontos para deploy no `docker-compose`, mas permanecem comentados por padrão para preservar a estabilidade em ambientes com menos de 32GB de RAM ou sem aceleração de GPU dedicada (CUDA/ROCm).
+- **Compatibilidade**: O sistema foi arquitetado para tirar proveito de GPUs **AMD (RX 580 via ROCm)** e **NVIDIA (GTX série 700+ via CUDA)** conforme disponibilidade do host.
+
+---
+
 
 ## 🛠️ Como Executar o Projeto
 

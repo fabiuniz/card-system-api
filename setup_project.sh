@@ -102,6 +102,7 @@ echo "✅ Estrutura de pastas higienizada!"
 # Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
 chmod -R 777 monitoring/grafana
 chmod -R 777 monitoring/prometheus
+chmod +x setup_utils.sh
 chmod +x setup_iaas.sh
 chmod +x setup_databases.sh 
 chmod +x setup_application.sh 
@@ -125,6 +126,7 @@ for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 # --- DOCKERFILE ---
 # --- DOCKER COMPOSE ---
 # --- TOOL SCRIPT DE LIMPEZA ---
+. setup_utils.sh
 . setup_iaas.sh
 . setup_databases.sh
 . setup_application.sh
@@ -166,13 +168,19 @@ fi
 
 echo "🐳 Gerando imagem Docker..."
 # Garante que a imagem seja construída com o JAR recém-testado
-docker-compose build santander-api
+docker-compose build --no-cache santander-api
 
 # --- INICIALIZAÇÃO DO STACK ---
-echo "🧹 Limpando ambiente..."
-docker-compose down --remove-orphans || true
+echo "🧹 Limpando ambiente anterior..."
+docker-compose down --remove-orphans
 
-echo "🚀 Subindo a Stack Poliglota..."
+echo "🔨 Gerando imagem Docker com o novo JAR..."
+docker-compose build --no-cache santander-api
+
+echo "♻️ Removendo imagens órfãs (<none>)..."
+docker image prune -f
+
+echo "🚀 Subindo a Stack..."
 docker-compose up -d
 
 echo "⏳ Aguardando a API subir (Health Check)..."

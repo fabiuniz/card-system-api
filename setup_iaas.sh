@@ -435,6 +435,7 @@ services:
         - santander-api
 
   santander-api:
+    build: .
     image: card-system-api:1.0
     container_name: santander-api
     ports:

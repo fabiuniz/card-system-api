@@ -638,6 +638,11 @@ minikube start --driver=docker --base-image="gcr.io/k8s-minikube/kicbase:v0.0.48
 echo "🔨 Gerando pacote JAR com Maven..."
 mvn clean package -DskipTests
 
+echo "📊 Relatório de cobertura gerado em: target/site/jacoco/index.html"
+mvn test -Dtest=TransactionServiceTest
+# Opcional: printar a cobertura no terminal (exemplo simples)
+grep -o 'Total[^%]*%' target/site/jacoco/index.html | head -1 || echo "Cobertura calculada."
+
 echo "🐳 Construindo imagem Docker da API..."
 docker build -t card-system-api:1.0 .
 

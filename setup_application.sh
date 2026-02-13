@@ -295,14 +295,34 @@ cat <<EOF > pom.xml
       <scope>runtime</scope>
     </dependency>
   </dependencies>
-  <build>
+ <build>
     <plugins>
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-      </plugin>
+        <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+
+        <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <version>0.8.8</version>
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>prepare-agent</goal>
+                    </goals>
+                </execution>
+                <execution>
+                    <id>report</id>
+                    <phase>test</phase>
+                    <goals>
+                        <goal>report</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
     </plugins>
-  </build>
+</build>
 </project>
 EOF
 
@@ -667,6 +687,64 @@ target/
 # Infra/Minikube
 *.tar
 minikube-linux-amd64
+EOF
+
+# Cria o diretório seguindo a convenção de pacotes Java
+mkdir -p src/test/java/com/fabiano/cardsystem/application/service/
+
+# Move o teste (ou cria ele) no lugar certo
+cat <<EOF > src/test/java/com/fabiano/cardsystem/application/service/TransactionServiceTest.java
+package com.fabiano.cardsystem.application.service;
+
+import com.fabiano.cardsystem.application.ports.out.TransactionOutputPort;
+import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
+import com.fabiano.cardsystem.domain.model.Transaction;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class TransactionServiceTest {
+
+    private TransactionService transactionService;
+    private TransactionOutputPort metricsPort;
+    private TransactionPersistencePort postgresPort;
+    private TransactionPersistencePort mongoPort;
+
+    @BeforeEach
+    void setup() {
+        metricsPort = mock(TransactionOutputPort.class);
+        postgresPort = mock(TransactionPersistencePort.class);
+        mongoPort = mock(TransactionPersistencePort.class);
+
+        // Simulamos a injeção de múltiplos adaptadores como o Spring faz
+        List<TransactionPersistencePort> persistencePorts = Arrays.asList(postgresPort, mongoPort);
+        
+        transactionService = new TransactionService(metricsPort, persistencePorts);
+    }
+
+    @Test
+    @DisplayName("Deve aprovar transação e persistir em todos os adaptadores quando valor <= 10k")
+    void shouldApproveAndPersistEverywhere() {
+        Transaction tx = new Transaction();
+        tx.setAmount(new BigDecimal("500.00"));
+        tx.setCardNumber("1234-5678");
+
+        Transaction result = transactionService.execute(tx);
+
+        assertEquals("APPROVED", result.getStatus());
+        assertNotNull(result.getTransactionId());
+        
+        verify(metricsPort, times(1)).reportApproval();
+        verify(postgresPort, times(1)).save(any(Transaction.class));
+        verify(mongoPort, times(1)).save(any(Transaction.class));
+    }
+}
 EOF
 
 #git add .

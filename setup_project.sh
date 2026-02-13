@@ -84,7 +84,8 @@ mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,\
 application/{service,ports/{in,out}},\
 adapters/{in/web/exception,out/{persistence,metrics}},\
 infrastructure/{security,config,persistence/{entity,document,repository,adapter}}} \
-src/test/java/com/fabiano/cardsystem/domain/model
+src/test/java/com/fabiano/cardsystem/domain/model \
+src/test/java/com/fabiano/cardsystem/application/service
 # b. OBSERVABILIDADE (Prometheus, Grafana, Nginx)
 mkdir -p monitoring/{prometheus,grafana/provisioning/{datasources,dashboards},nginx}
 # c. INFRAESTRUTURA & CLOUD (IaaS, K8s, Terraform)
@@ -144,22 +145,29 @@ for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
 #sdk install maven
 #mvn -version
 
-echo "🔨 Iniciando Build da aplicação..."
-mvn clean package -DskipTests
+echo "🔨 Iniciando Build COMPLETO com Auditoria JaCoCo..."
+# REMOVIDO o -DskipTests para permitir que o JaCoCo gere os dados
+mvn clean package 
+
+# Validação imediata do Relatório
+if [ -d "target/site/jacoco" ]; then
+    echo "✅ JaCoCo: Relatório de cobertura gerado com sucesso!"
+    # Extrai a porcentagem de cobertura para o log (Toque de Especialista)
+    COVERAGE=$(grep -oP 'Total.*?(\d+%)' target/site/jacoco/index.html | head -1)
+    echo "📊 Métrica de Cobertura: $COVERAGE"
+else
+    echo "⚠️ JaCoCo: Relatório não encontrado. Verifique os logs do Maven acima."
+fi
+
 echo "🐳 Gerando imagem Docker..."
-#docker build -t card-system-api:1.0 .
-#docker run --rm card-system-api:1.0 java -version
+# Garante que a imagem seja construída com o JAR recém-testado
+docker-compose build santander-api
 
-# --- INICIALIZAÇÃO DO STACK DE MONITORAMENTO ---
-echo "🧹 Limpando containers antigos para evitar conflitos..."
-# Remove containers manuais (caso existam)
-docker stop santander-api prometheus grafana || true
-docker rm santander-api prometheus grafana || true
-
-# Remove a stack do docker-compose completamente (containers, redes e órfãos)
+# --- INICIALIZAÇÃO DO STACK ---
+echo "🧹 Limpando ambiente..."
 docker-compose down --remove-orphans || true
 
-echo "🚀 Iniciando Stack Completa..."
+echo "🚀 Subindo a Stack Poliglota..."
 docker-compose up -d
 
 echo "⏳ Aguardando a API subir (Health Check)..."

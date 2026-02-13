@@ -114,24 +114,35 @@ VALUES ('mysql-seed-001', '4444555566667777', 150.75, 'APPROVED'),
        ('mysql-seed-002', '1111222233334444', 10.00, 'REJECTED');
 EOF
 
-# --- CONFIGURAÇÃO ACTUATOR (application.yml) ---
+# --- CONFIGURAÇÃO ACTUATOR & DATABASE REPLICATION (application.yml) ---
 cat <<EOF > src/main/resources/application.yml
 spring:
   application:
     name: card-system-platform
+  
+  # 1. MongoDB (Auditoria/NoSQL)
   data:
     mongodb:
       uri: mongodb://admin:admin@mongodb:27017/card_system?authSource=admin    
+  
+  # 2. PostgreSQL (Transacional Principal)
   datasource:
     url: jdbc:postgresql://postgresdb:5432/santander_system
     username: admin
     password: admin
     driver-class-name: org.postgresql.Driver
+  
+  # 3. MySQL (Legacy/Mirror - Configuração Customizada)
+  datasource-mysql:
+    url: jdbc:mysql://mysqldb:3306/santander_system
+    username: root
+    password: admin
+
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect # Mais direto para o Spring
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
     hibernate:
-      ddl-auto: create
+      ddl-auto: update # Alterado para 'update' para não apagar dados a cada restart
     properties:
       hibernate:
         format_sql: true
@@ -141,14 +152,15 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE 
 
+# Controle de Perfil
 database:
-  target: postgres # Gatilho para o seu Adapter
+  target: ${DB_SWITCH:postgres}
 
 management:
   endpoints:
     web:
       exposure:
-        include: "health,metrics,prometheus"
+        include: "health,info,metrics,prometheus"
       cors:
         allowed-origins: "*"
         allowed-methods: "*"
@@ -156,6 +168,17 @@ management:
   endpoint:
     health:
       show-details: always
+    prometheus:
+      enabled: true
+  
+  # Métricas para o Grafana (AIOps Ready)
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true # Essencial para ver latência no Grafana
 EOF
 
 cat <<EOF > clearfolder.sh
@@ -168,23 +191,56 @@ EOF
 
 cat <<EOF > testedb.sh
 #!/bin/bash
-docker logs santander-api
-echo -e "MongoDB🍃"
-docker exec -it mongodb mongosh -u admin -p admin --authenticationDatabase admin --eval "db.getSiblingDB('santander_audit').transaction_audit.find()"
-echo -e "MySql🐬"
-docker exec -it mysqldb mysql -u root -padmin -D santander_system -e "SELECT * FROM transactions;"
-echo -e "Postgree🐘"
-docker exec -it postgresdb psql -U admin -d santander_system -c "SELECT * FROM transactions ORDER BY transaction_id DESC;"
+clear
+# Função para trocar o banco e reiniciar a API
+switch_db() {
+    local banco=\$1
+    echo "🔄 Efetuando switch para: \$banco..."
+    export DB_SWITCH=\$banco
+    docker-compose up -d santander-api
+    
+    echo "⏳ Aguardando API estabilizar \$local banco..."
+    until \$(curl --output /dev/null --silent --head --fail http://localhost:8080/actuator/health); do
+        printf '.'
+        sleep 2
+    done
+    echo -e "\n✅ API Online com \$banco!"
+}
+
+# Verifica se foi passado parâmetro de switch
+case "\$1" in
+    1) switch_db "postgres" ;;
+    2) switch_db "mysql" ;;
+    3) switch_db "mongodb" ;;
+    *) echo "ℹ️ Mantendo configuração atual ou apenas listando dados." ;;
+esac
+
+echo -e "\n--- 📊 ESTADO ATUAL DOS BANCOS ---"
+
+echo -e "\n🍃 MongoDB (Auditoria):"
+docker exec -it mongodb mongosh -u admin -p admin --authenticationDatabase admin --eval "db.getSiblingDB('card_system').transaction_audit.find().limit(5)" 2>/dev/null
+
+echo -e "\n🐬 MySQL (Mirror):"
+docker exec -it mysqldb mysql -u root -padmin -D santander_system -e "SELECT * FROM transactions ORDER BY created_at DESC LIMIT 5;" 2>/dev/null
+
+echo -e "\n🐘 Postgres (Core):"
+docker exec -it postgresdb psql -U admin -d santander_system -c "SELECT * FROM transactions ORDER BY created_at DESC LIMIT 5;" 2>/dev/null
+
+echo -e "\n--------------------------------------------------------"
+echo "💡 Uso: ./testedb.sh [opção]"
+echo "1 - Switch para Postgres"
+echo "2 - Switch para MySQL"
+echo "3 - Switch para MongoDB"
+echo "Qualquer outra tecla apenas lista os dados."
+echo "--------------------------------------------------------"
 EOF
 
+chmod +x testedb.sh
+
 echo "✅ Ambiente database pronto!"
-
-echo "Para usar MySQL: export DB_SWITCH=mysql docker-compose up -d santander-api"
-echo "Para usar MongoDB: export DB_SWITCH=mongodb docker-compose up -d santander-api"
-echo "Para usar Postgres (padrão): export DB_SWITCH=postgres docker-compose up -d santander-api"
-
 
 echo 'docker exec -it postgresdb psql -U admin -d santander_system -c "SELECT * FROM transactions ORDER BY transaction_id DESC;"'
 echo 'docker exec -it mysqldb mysql -u root -padmin -D santander_system -e "SELECT * FROM transactions;"'
 echo 'docker exec -it mongodb mongosh -u admin -p admin --authenticationDatabase admin --eval "db.getSiblingDB('santander_audit').transaction_audit.find()"'
 echo 'docker logs santander-api'
+echo 'mvn test -Dtest=TransactionServiceTest'

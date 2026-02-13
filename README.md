@@ -46,7 +46,7 @@ Diferente da versão inicial de Analista III, esta branch introduz conceitos ava
 - **Looker / LookML**: Modelagem de dados para análise de KPIs.
 
 ## 🏗️ Arquitetura
-O projeto utiliza **Arquitetura Hexagonal** para isolar o domínio das tecnologias externas (bancos de dados, frameworks, APIs externas). 
+O projeto utiliza **Arquitetura Hexagonal** para isolar o domínio das tecnologias externas (bancos de dados, frameworks, APIs externas). A plataforma utiliza o padrão de Persistência Poliglota Decoupled. Enquanto o PostgreSQL garante a consistência transacional (ACID), o MongoDB atua como um 'Side-Persistence' para logs de auditoria não estruturados, e o MySQL funciona como uma réplica de leitura para BI. Essa segregação impede que o tráfego de analytics degrade a performance do motor de autorização financeiro.
 
 - **Domain**: Entidades e regras de negócio puras.
 - **Application**: Casos de uso e portas de entrada/saída.

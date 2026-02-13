@@ -512,7 +512,7 @@ public class TransactionDocument {
 EOF
 
 # 5. Adaptador Postgres FUNCIONAL
-cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/adapter/TransactionPostgresAdapter.java
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/out/persistence/TransactionPostgresAdapter.java
 package com.fabiano.cardsystem.infrastructure.persistence.adapter;
 
 import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;
@@ -578,7 +578,7 @@ public class TransactionMongoAdapter implements TransactionPersistencePort {
 EOF
 
 # Adaptador MySQL FUNCIONAL
-cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/adapter/TransactionMySQLAdapter.java
+cat <<EOF > ${PROJETO_CONF[PACKAGE_PATH]}/adapters/out/persistence/TransactionMySQLAdapter.java
 package com.fabiano.cardsystem.infrastructure.persistence.adapter;
 
 import com.fabiano.cardsystem.application.ports.out.TransactionPersistencePort;

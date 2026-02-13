@@ -1,5 +1,5 @@
 #!/bin/bash
-
+clear
 # --- FUNÇÃO DE VERIFICAÇÃO DE DEPENDÊNCIAS ---
 verificar_ferramentas() {
     echo "🔍 Verificando dependências do sistema..."
@@ -79,21 +79,26 @@ echo "🚀 Iniciando criação do projeto ${PROJETO_CONF[PROJECT_NAME]}..."
 # 1. Criar estrutura de pastas (REMOVIDO o ${PROJETO_CONF[PROJECT_NAME]} do caminho inicial)
 # Cria toda a estrutura de uma vez, sem repetições
 # a. CORE DA APLICAÇÃO (Arquitetura Hexagonal Java)
-rm -f ${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/repository/PostgresTransactionRepository.java
+echo "🧹 Limpando resquícios e organizando Arquitetura Hexagonal..."
+# 1. Remove pastas de Frontend que entraram por engano no projeto Java
+rm -rf src/assets src/components
+rm -rf "${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/adapter"
+# 2. Cria a estrutura limpa e profissional
 mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,\
 application/{service,ports/{in,out}},\
 adapters/{in/web/exception,out/{persistence,metrics}},\
-infrastructure/{security,config,persistence/{entity,document,repository,adapter}}} \
+infrastructure/{security,config,persistence/{entity,document,repository}}} \
 src/test/java/com/fabiano/cardsystem/domain/model \
 src/test/java/com/fabiano/cardsystem/application/service
 # b. OBSERVABILIDADE (Prometheus, Grafana, Nginx)
 mkdir -p monitoring/{prometheus,grafana/provisioning/{datasources,dashboards},nginx}
 # c. INFRAESTRUTURA & CLOUD (IaaS, K8s, Terraform)
 mkdir -p {.idx,k8s,terraform}
-# Databases
-mkdir -p {./postgres-init,./init-db,./mysql-init,./pgadmin-config}
-# d. CI/CD & RECURSOS (GitHub, Scripts, Resources)
+# Databases (Configurações de Inicialização)
+mkdir -p {postgres-init,mysql-init,mongo-init,pgadmin-config}
+# d. CI/CD & RECURSOS
 mkdir -p {.github/workflows,scripts,src/main/resources}
+echo "✅ Estrutura de pastas higienizada!"
 # Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
 chmod -R 777 monitoring/grafana
 chmod -R 777 monitoring/prometheus

@@ -1,11 +1,48 @@
 spring:
   application:
     name: card-system-platform
+  
+  # 1. MongoDB (Auditoria/NoSQL)
+  data:
+    mongodb:
+      uri: mongodb://admin:admin@mongodb:27017/card_system?authSource=admin    
+  
+  # 2. PostgreSQL (Transacional Principal)
+  datasource:
+    url: jdbc:postgresql://postgresdb:5432/santander_system
+    username: admin
+    password: admin
+    driver-class-name: org.postgresql.Driver
+  
+  # 3. MySQL (Legacy/Mirror - Configuração Customizada)
+  datasource-mysql:
+    url: jdbc:mysql://mysqldb:3306/santander_system
+    username: root
+    password: admin
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true
+    hibernate:
+      ddl-auto: update # Alterado para 'update' para não apagar dados a cada restart
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE 
+
+# Controle de Perfil
+database:
+  target: 
+
 management:
   endpoints:
     web:
       exposure:
-        include: "health,metrics,prometheus"
+        include: "health,info,metrics,prometheus"
       cors:
         allowed-origins: "*"
         allowed-methods: "*"
@@ -13,3 +50,14 @@ management:
   endpoint:
     health:
       show-details: always
+    prometheus:
+      enabled: true
+  
+  # Métricas para o Grafana (AIOps Ready)
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true # Essencial para ver latência no Grafana

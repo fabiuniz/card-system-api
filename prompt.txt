@@ -1,0 +1,495 @@
+1) Tenho esse projeto e queria continuar o você precisa para ter contexto para me ajudar ?
+Já posso adiantar que esses arquivos: 
+
+setup_utils.sh
+setup_databases.sh
+setup_application.sh
+setup_analyses.sh
+setup_iaas.sh
+
+Os arquivo ".sh" controem todos outros informe se houver mais algum .sh para fechar o contexto.
+são essenciais me peça cada um deles que não encontrar em "Nested Scripts" até você fechar o contexto!
+
+Essa é a arvore de pastas do projeto gerado:
+
+card-system-api/
+│   .github/
+│       workflows/
+│           ├── deploy.yml
+│   ├── .gitignore
+│   .idx/
+│       ├── dev.nix
+│   ├── Dockerfile
+│   ├── README.md
+│   ├── add_knowledge.sh
+│   aiops/
+│   │   ├── Dockerfile.ai
+│   │   brain/
+│   │   config/
+│   │   ├── predictive_agent_rag.py
+│   │   ├── reindex_brain.py
+│       vector_db/
+│   analyses/
+│   │   looker/
+│   │   │   ├── card_system_metrics.view.lkml
+│   │       ├── dados_ficticios_transacoes.csv
+│       powerbi/
+│   card-system-front-angular/
+│   │   ├── Dockerfile
+│   │   ├── angular.json
+│   │   ├── package.json
+│   │   ├── proxy.conf.json
+│   │   src/
+│   │   │   app/
+│   │   │   │   ├── app.component.html
+│   │   │       ├── app.component.ts
+│   │   │   ├── index.html
+│   │   │   ├── main.ts
+│   │   │   ├── polyfills.ts
+│   │       ├── styles.css
+│   │   ├── tsconfig.app.json
+│       ├── tsconfig.json
+│   card-system-front-flutter/
+│   │   ├── build_all.sh
+│   │   cardsystem/
+│   │   │   lib/
+│   │   │   │   ├── main.dart
+│   │   │   │   models/
+│   │   │       services/
+│   │       ├── pubspec.yaml
+│   │   dist/
+│       techtaste/
+│       │   lib/
+│       │   │   ├── main.dart
+│       │   │   models/
+│       │       services/
+│           ├── pubspec.yaml
+│   card-system-front-react/
+│   │   ├── Dockerfile
+│   │   ├── index.html
+│   │   ├── package.json
+│   │   src/
+│   │   │   ├── App.jsx
+│   │       ├── main.jsx
+│       ├── vite.config.js
+│   card-system-front-vue/
+│   │   ├── Dockerfile
+│   │   ├── index.html
+│   │   ├── package.json
+│   │   ├── postcss.config.cjs
+│   │   src/
+│   │   │   ├── App.vue
+│   │   │   assets/
+│   │   │   components/
+│   │   │   ├── main.js
+│   │       ├── style.css
+│   │   ├── tailwind.config.cjs
+│       ├── vite.config.js
+│   ├── clear_all_service.sh
+│   ├── clearfolder.sh
+│   ├── deploy_infra.sh
+│   ├── docker-compose.yml
+│   ├── flow.md
+│   images/
+│   │   ├── fluxo.png
+│   │   ├── fluxob.png
+│       ├── grafana.png
+│   init-db/
+│   iot/
+│       esp01_monitor/
+│           ├── esp01_monitor.ino
+│   ├── join_ext.txt
+│   k8s/
+│   │   ├── deployment.yaml
+│   │   ├── hpa.yaml
+│   │   ├── minikube-linux-amd64
+│       ├── service.yaml
+│   ├── minikube-linux-amd64
+│   mongo-init/
+│   monitoring/
+│   │   ├── docker-compose.yml
+│   │   grafana/
+│   │       provisioning/
+│   │       │   dashboards/
+│   │       │   │   ├── dashboard_config.yml
+│   │       │   │   ├── jvm_micrometer.json
+│   │       │       ├── santander_transactions.json
+│   │           datasources/
+│   │               ├── datasource.yml
+│   │   nginx/
+│   │       ├── nginx.conf
+│       prometheus/
+│           ├── prometheus.yml
+│   mysql-init/
+│       ├── init.sql
+│   pgadmin-config/
+│       ├── servers.json
+│   ├── pom.xml
+│   postgres-init/
+│       ├── setup.sql
+│   ├── prompt.txt
+│   scripts/
+│       ├── aiops_health_agent.py
+│   ├── setup_all_minikube.sh
+│   ├── setup_analyses.sh
+│   ├── setup_application.sh
+│   ├── setup_databases.sh
+│   ├── setup_front_angular.sh
+│   ├── setup_front_flutter.sh
+│   ├── setup_front_react.sh
+│   ├── setup_front_vue.sh
+│   ├── setup_iaas.sh
+│   ├── setup_iot.sh
+│   ├── setup_k8s.sh
+│   ├── setup_ollama.sh
+│   ├── setup_project.sh
+│   ├── setup_terraform.sh
+│   ├── setup_utils.sh
+│   ├── sftp-config.json
+│   src/
+│   │   assets/
+│   │   components/
+│   │   main/
+│   │   │   java/
+│   │   │       com/
+│   │   │           fabiano/
+│   │   │               cardsystem/
+│   │   │               │   ├── CardSystemApplication.java
+│   │   │               │   adapters/
+│   │   │               │   │   in/
+│   │   │               │       out/
+│   │   │               │   application/
+│   │   │               │   │   ports/
+│   │   │               │       service/
+│   │   │               │           ├── TransactionService.java
+│   │   │               │   domain/
+│   │   │               │       model/
+│   │   │               │           ├── Transaction.java
+│   │   │                   infrastructure/
+│   │   │                   │   config/
+│   │   │                   │   persistence/
+│   │   │                       security/
+│   │   │                           ├── SecurityConfig.java
+│   │       resources/
+│   │       │   ├── application-mongodb.properties
+│   │       │   ├── application-mysql.properties
+│   │       │   ├── application-postgres.properties
+│   │           ├── application.yml
+│       test/
+│           java/
+│               com/
+│                   fabiano/
+│                       cardsystem/
+│                       │   application/
+│                       │       service/
+│                       │           ├── TransactionServiceTest.java
+│                           domain/
+│                               model/
+│                                   ├── TransactionTest.java
+│   terraform/
+│   │   .terraform/
+│   │       providers/
+│   │           registry.terraform.io/
+│   │               hashicorp/
+│   │                   google/
+│   │                       7.16.0/
+│   │                           linux_amd64/
+│   │                           │   ├── LICENSE.txt
+│   │                               ├── terraform-provider-google_v7.16.0_x5
+│   │   ├── .terraform.lock.hcl
+│   │   ├── local.tf
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   ├── setup_terraform.sh
+│       ├── terraform.tfvars
+    ├── testedb.sh
+
+Esse é o setup_project.sh :
+
+#!/bin/bash
+clear
+# --- FUNÇÃO DE VERIFICAÇÃO DE DEPENDÊNCIAS ---
+verificar_ferramentas() {
+    echo "🔍 Verificando dependências do sistema..."
+
+    # 1. Verificar/Instalar Docker
+    if ! command -v docker &> /dev/null; then
+        echo "🐳 Docker não encontrado. Instalando..."
+        curl -fsSL https://get.docker.com | sh
+        systemctl start docker
+        systemctl enable docker
+    else
+        echo "✅ Docker já está instalado."
+    fi
+
+    # 2. Verificar/Instalar Docker Compose
+    if ! command -v docker-compose &> /dev/null; then
+        echo "🐙 Docker Compose não encontrado. Instalando..."
+        # Baixa a versão estável mais recente
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+    else
+        echo "✅ Docker Compose já está instalado."
+    fi
+
+    # 3. Verificar Ferramentas de Rede e Python (O que causou erro antes)
+    echo "📦 Atualizando ferramentas de rede e Python..."
+    apt-get update -qq
+    apt-get install -y curl python3-venv python3-pip &> /dev/null
+}
+
+# 1. INSTALAÇÃO DE DEPENDÊNCIAS (Mover para o topo)
+echo "🔧 Preparando ferramentas do Host..."
+verificar_ferramentas
+
+# Criando o "Objeto" de configuração (Array Associativo)
+unset PROJETO_CONF
+declare -A PROJETO_CONF
+
+# 1. Declara o Array Associativo
+declare -A PROJETO_CONF
+
+# 2. Inicializa com os valores estáticos
+PROJETO_CONF=(
+  [PROJECT_NAME]="card-system-api"
+  [PACKAGE_PATH]="src/main/java/com/fabiano/cardsystem"
+  [HOST_NAME]='vmlinuxd'
+  [INTERNAL_HOST]="santander-api"
+  [EMAIL]="fabiuniz@msn.com"
+  [NOME]="Fabiano"
+)
+
+export PROJECT_ROOT="$(pwd)/${PROJETO_CONF[PROJECT_NAME]}"
+
+# 3. Faz a atribuição dinâmica (Sincroniza URL com o Host)
+# PROJETO_CONF[HOST_NAME]='localhost'
+PROJETO_CONF[URL_FIREBASE]=${PROJETO_CONF[HOST_NAME]}
+PROJETO_CONF[URL_FIREBASE]="3000-firebase-my-java-app-1756832118227.cluster-f73ibkkuije66wssuontdtbx6q.cloudworkstations.dev"
+
+# --- Validação ---
+echo "🚀 Configuração carregada para: ${PROJETO_CONF[NOME]}"
+echo "📍 Host: ${PROJETO_CONF[HOST_NAME]}"
+echo "🔗 URL:  ${PROJETO_CONF[URL_FIREBASE]}"
+
+# 1. Garante que estamos na raiz do projeto (sem duplicar)
+CURRENT_DIR_NAME=$(basename "$PWD")
+
+if [ "$CURRENT_DIR_NAME" == "${PROJETO_CONF[PROJECT_NAME]}" ]; then
+    echo "📍 Você já está na pasta '${PROJETO_CONF[PROJECT_NAME]}'. Criando estrutura aqui..."
+else
+    echo "📂 Criando pasta '${PROJETO_CONF[PROJECT_NAME]}' e entrando nela..."
+    mkdir -p "${PROJETO_CONF[PROJECT_NAME]}"
+    cd "${PROJETO_CONF[PROJECT_NAME]}" || exit
+fi
+
+echo "🚀 Iniciando criação do projeto ${PROJETO_CONF[PROJECT_NAME]}..."
+
+# 1. Criar estrutura de pastas (REMOVIDO o ${PROJETO_CONF[PROJECT_NAME]} do caminho inicial)
+# Cria toda a estrutura de uma vez, sem repetições
+# a. CORE DA APLICAÇÃO (Arquitetura Hexagonal Java)
+echo "🧹 Limpando resquícios e organizando Arquitetura Hexagonal..."
+# 1. Remove pastas de Frontend que entraram por engano no projeto Java
+rm -rf src/assets src/components
+rm -rf "${PROJETO_CONF[PACKAGE_PATH]}/infrastructure/persistence/adapter"
+# 2. Cria a estrutura limpa e profissional
+mkdir -p "${PROJETO_CONF[PACKAGE_PATH]}"/{domain/model,\
+application/{service,ports/{in,out}},\
+adapters/{in/web/exception,out/{persistence,metrics}},\
+infrastructure/{security,config,persistence/{entity,document,repository}}} \
+src/test/java/com/fabiano/cardsystem/domain/model \
+src/test/java/com/fabiano/cardsystem/application/service
+# b. OBSERVABILIDADE (Prometheus, Grafana, Nginx)
+mkdir -p monitoring/{prometheus,grafana/provisioning/{datasources,dashboards},nginx}
+# c. INFRAESTRUTURA & CLOUD (IaaS, K8s, Terraform)
+mkdir -p {.idx,k8s,terraform}
+# Databases (Configurações de Inicialização)
+mkdir -p {postgres-init,mysql-init,mongo-init,pgadmin-config}
+# d. CI/CD & RECURSOS
+mkdir -p {.github/workflows,scripts,src/main/resources}
+#IoT
+mkdir -p iot/esp01_monitor/
+#IA
+mkdir -p {aiops/brain,aiops/vector_db,aiops/config}
+echo "✅ Estrutura de pastas higienizada!"
+# Corrige permissões de escrita para os volumes do Grafana/Prometheus no ambiente Cloud
+chmod -R 777 monitoring/grafana
+chmod -R 777 monitoring/prometheus
+chmod +x setup_utils.sh
+chmod +x setup_iaas.sh
+chmod +x setup_databases.sh 
+chmod +x setup_application.sh 
+chmod +x setup_front_vue.sh
+chmod +x setup_front_angular.sh
+chmod +x setup_front_react.sh
+chmod +x setup_front_flutter.sh
+chmod +x setup_iot.sh
+chmod +x setup_ollama.sh
+for f in setup_*.sh; do dos2unix "$f" && chmod +x "$f"; done
+
+# Conteúdo do setup_iaas.sh
+# --- DOCUMENTAÇÃO TÉCNICA (README) ---
+# --- DOCUMENTAÇÃO TÉCNICA (Mermaid Flow) ---
+# --- KUBERNETES: DEPLOYMENT ---
+# --- KUBERNETES: HPA & SERVICE ---
+# --- TERRAFORM: GOOGLE CLOUD ---
+# --- GITHUB ACTIONS: CI/CD ---
+# --- NGNIX ---
+# --- GRAFANA DATASOURCE ---
+# --- GRAFANA CONFIG--- 
+# --- PROMETHEUS ---
+# --- DOCKERFILE ---
+# --- DOCKER COMPOSE ---
+# --- TOOL SCRIPT DE LIMPEZA ---
+. setup_utils.sh
+. setup_iaas.sh
+. setup_databases.sh
+. setup_application.sh
+# --- Metricas sobre o projeto ---
+. setup_analyses.sh
+. setup_front_vue.sh
+. setup_front_angular.sh
+. setup_front_react.sh
+. setup_front_flutter.sh
+. setup_iot.sh
+. setup_ollama.sh
+
+#curl -s "https://get.sdkman.io" | bash
+#source "$HOME/.sdkman/bin/sdkman-init.sh"
+#sdk list java | grep "11."
+#sdk install java 11.0.29-tem
+#sdk default java 11.0.29-tem
+#java -version
+#
+#openjdk version "11.0.29" 2025-10-21
+#OpenJDK Runtime Environment Temurin-11.0.29+7 (build 11.0.29+7)
+#OpenJDK 64-Bit Server VM Temurin-11.0.29+7 (build 11.0.29+7, mixed mode)
+
+#sdk install maven
+#mvn -version
+
+echo "🔨 Iniciando Build COMPLETO com Auditoria JaCoCo..."
+# REMOVIDO o -DskipTests para permitir que o JaCoCo gere os dados
+mvn clean package 
+
+# Validação imediata do Relatório
+if [ -d "target/site/jacoco" ]; then
+    echo "✅ JaCoCo: Relatório de cobertura gerado com sucesso!"
+    # Extrai a porcentagem de cobertura para o log (Toque de Especialista)
+    COVERAGE=$(grep -oP 'Total.*?(\d+%)' target/site/jacoco/index.html | head -1)
+    echo "📊 Métrica de Cobertura: $COVERAGE"
+else
+    echo "⚠️ JaCoCo: Relatório não encontrado. Verifique os logs do Maven acima."
+fi
+
+echo "🐳 Gerando imagem Docker..."
+# Garante que a imagem seja construída com o JAR recém-testado
+docker-compose build --no-cache santander-api
+
+# --- INICIALIZAÇÃO DO STACK ---
+echo "🧹 Limpando ambiente anterior..."
+docker-compose down --remove-orphans
+
+echo "🔨 Gerando imagem Docker com o novo JAR..."
+docker-compose build --no-cache santander-api
+
+echo "♻️ Removendo imagens órfãs (<none>)..."
+docker image prune -f
+
+echo "🚀 Subindo a Stack..."
+docker-compose up -d
+
+echo "⏳ Aguardando a API subir (Health Check)..."
+# Loop de espera inteligente
+for i in {1..30}; do
+    if curl -s http://${PROJETO_CONF[HOST_NAME]}:8080/actuator/health | grep -q "UP"; then
+        echo "✅ API está Online!"
+        break
+    fi
+    echo -n "."
+    sleep 2
+done
+
+# Executa o Agente AIOps
+
+# Simula tráfego inicial para o Agente Python ter dados
+echo "📈 Gerando tráfego de teste..."
+curl -s -X POST http://${PROJETO_CONF[HOST_NAME]}:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 500}' > /dev/null
+curl -s -X POST http://${PROJETO_CONF[HOST_NAME]}:8080/api/v1/transactions -H "Content-Type: application/json" -d '{"cardNumber": "123", "amount": 15000}' > /dev/null
+
+# 1. Corrigir o ambiente virtual do Python (conforme o erro sugeriu)
+rm -rf venv
+python3 -m venv venv
+# 2. Instalar a biblioteca requests necessária para o aiops_health_agent.py
+./venv/bin/pip install requests
+# 3. RUN AIOps
+./venv/bin/python3 scripts/aiops_health_agent.py
+
+echo "✅ Testes de metricas realizado!"
+
+echo "--------------------------"
+# Define a cor azul sublinhado
+BLUE_UNDERLINE='\e[4;34m'
+RED_UNDERLINE='\e[4;31m'
+NC='\e[0m' # No Color (reseta a cor)
+echo -e "\n--- 🚀 LINKS DA APLICAÇÃO Clique no link (Segure CTRL + Clique): ---"
+echo -e "☕API Base:   ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/api/v1/transactions${NC}"
+echo -e "📖 Swagger UI: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8080/swagger-ui/index.html${NC}"
+echo -e "📈 Prometheus: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:9090/targets${NC}"
+echo -e "🔥 Grafana: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:3000 (Login: admin / Senha: admin${NC}"
+echo -e "🍃 MongoDb: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8082 (Login: admin / Senha: admin${NC}"
+echo -e "🐬 Mysql: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8083 (servidor:mysqldb Login: root / Senha: admin${NC}"
+echo -e "🐘 Postgres:  ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:8084 (admin@admin.com / admin)${NC}"
+echo -e "🟢 Vue Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4000${NC}"
+echo -e "🅰️ Angular Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4200${NC}"
+echo -e "⚛️ React Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME]}:4300${NC}"
+echo -e "⚙️ Actuator: ${RED_UNDERLINE}curl http://${PROJETO_CONF[HOST_NAME]}:8080/actuator/prometheus${NC}"
+echo -e "🐍 Python: ${RED_UNDERLINE}python3 scripts/aiops_health_agent.py${NC}"
+echo "--------------------------"
+
+echo 'start chrome --incognito "https://gemini.google.com/" "http://vmlinuxd:8081" "http://vmlinuxd:3000" "http://vmlinuxd:9090/targets" "http://vmlinuxd:8080/swagger-ui/index.html" "http://vmlinuxd:4000" "http://vmlinuxd:4200" "http://vmlinuxd:4300" "http://vmlinuxd:8082" "http://vmlinuxd:8083" "http://vmlinuxd:8084"'
+
+echo 'start chrome --incognito "https://gemini.google.com/" "http://vmlinuxd:8081" "http://vmlinuxd:3000" "http://vmlinuxd:9090/targets" "http://vmlinuxd:8080/swagger-ui/index.html" "http://vmlinuxd:4000" "http://vmlinuxd:4200" "http://vmlinuxd:4300" "http://vmlinuxd:8082" "http://vmlinuxd:8083" "http://vmlinuxd:8084"'
+
+
+2. Ok! Agora que sabe o contexto dessa estrutura onde o centro é setup_application.sh e o setup_project.sh é o construtor, onde devo fazer jus de todo esse trabalho ?. Quero que comece me ajude a
+
+veriaficar se a extrutura de persistencia Hexagonal está como o proposto!
+
+3. Após a Entrega Final: Crie também um fluxo inerente ao tema principal que realmente tenha relevância e faça um fluxo semelhante ao exemplo logo abaixo com a estrutura de (https://mermaid.live/edit) dê o linkd desse endereço logo acima.  **Regra Mermaid: O nome/título de um 'subgraph' deve ser sempre envolvido por aspas duplas (ex: subgraph "Título com Espaços sem parenteses ou aspas").** Use a estrutura abaixo somente como um exemplo a seguir, "O conteúdo de cada nó deve ser listado exatamente como abaixo, sem adicionar parênteses:". 
+flowchart TD
+    T["Google Cloud Computing Foundations Certificate > Prepare Data for ML APIs on Google Cloud (GSP323)"]
+    subgraph TD
+        P1(1. 🚚 Máquina 1: Limpeza de Dados - **Cloud Dataflow**<br>Job: Text Files on Cloud Storage to BigQuery<br>UDF: `lab.js` para transformação de dados)
+        P2(2. ⚡ Máquina 2: Análise Gigante - **Cloud Dataproc**<br>Job: SparkPageRank em cluster E2-standard-2<br>Objetivo: Processamento distribuído de `data.txt`)
+        P3(3. 🗣️ Máquina 3: Transcritor de Áudio - **Cloud Speech-to-Text API**<br>Objetivo: Converter `task3.flac` áudio de cliente em texto)
+        P4(4. 🧠 Máquina 4: Identificador de Ideias - **Cloud Natural Language API**<br>Objetivo: Analisar texto sobre Odin e extrair Entidades/Sentimento)
+    end
+    style T fill:#FFFFCC,stroke:#333,stroke-width:2px,color:black
+    
+    D1[📁 Armazém de Arquivos Brutos - **Cloud Storage Bucket**<br>Dados de Entrada: `lab.csv`, `data.txt`, `task3.flac`]
+    D2[📊 Banco de Dados Final Pró-IA: `clientes_879` - **BigQuery**<br>Destino Final: Tabelas limpas e Resultados de ML/Análise]
+    D3[💾 Mesa de Trabalho Rápida - **Cloud Storage Bucket Temporário **<br>Função: Staging/Armazenamento Intermediário para Dataproc Task 2]
+
+    D1 -->|Tabelas de Clientes Sujas `lab.csv`| P1
+    P1 -->|Tabelas de Clientes Limpas UDF Aplicada| D2
+
+    D1 -->|Arquivo Gigante para Análise `data.txt`| P2
+    P2 -->|Cópia para a Mesa de Trabalho `/data.txt` no HDFS| D3
+    D3 -->|Cálculo de Importância de Páginas Spark PageRank| P2
+    P2 -->|Resultados de Análise Difícil| D2
+
+    D1 -->|Áudio de Gravação de Cliente `task3.flac`| P3
+    P3 -->|O Áudio Virou Texto Resultado `Cloud Speech Location`| P4
+    P4 -->|Informações Chave Organizadas Resultado `Cloud Natural Language Location`| D2
+4.  **Após o flowchart TD:** Crie um json "perguntasOriginais" com a extrutura assim com um aproveitamento aproriado de estudo com quantidade de questões inerente ao tema principal(Description) que realmente tem relevância e deve ter no mínimo 20 questões que cubram todo tema:
+const perguntasOriginais = [{pergunta: 'Quem criou o avião?",justificativa: "Embora a questão possa gerar debate, no Brasil, Alberto Santos Dumont é amplamente reconhecido como o pioneiro por ter realizado um voo público e autopropulsado com o 14-Bis em 1906, partindo do chão por seus próprios meios.",respostas: [{ opcao: "Santos Dumont", correto: true },{ opcao: "Da Vinci", correto: false }, { opcao: "Mona Lisa", correto: false }]}];
+
+
+docker images; docker ps ; # docker image prune -f
+
+docker logs santander-front-angular --tail 10
+
+start chrome --incognito "https://gemini.google.com/" "http://vmlinuxd:8081" "http://vmlinuxd:3000" "http://vmlinuxd:9090/targets" "http://vmlinuxd:8080/swagger-ui/index.html" "http://vmlinuxd:4000" "http://vmlinuxd:4200" "http://vmlinuxd:4300" "http://vmlinuxd:8082" "http://vmlinuxd:8083" "http://vmlinuxd:8084"
+
+
+

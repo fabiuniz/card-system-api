@@ -1,0 +1,36 @@
+<div class="min-h-screen bg-gray-100 font-sans text-gray-900">
+  <header class="bg-[#ec1c24] text-white p-4 shadow-md">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-xl font-bold tracking-tight">Santander Card System <span class="font-light text-sm">| Angular Evolution</span></h1>
+      <div class="text-xs uppercase bg-white/20 px-2 py-1 rounded">🔥 SRE Driven</div>
+    </div>
+  </header>
+  <main class="container mx-auto p-6">
+    <div class="grid md:grid-cols-2 gap-8">
+      <section class="bg-white p-6 rounded-lg shadow-sm border-t-4 border-[#ec1c24]">
+        <h2 class="text-lg font-semibold mb-4 border-b pb-2">Simular Nova Transação</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Número do Cartão</label>
+            <input [(ngModel)]="form.cardNumber" name="card" type="text" class="mt-1 block w-full border p-2 rounded" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Valor (R$)</label>
+            <input [(ngModel)]="form.amount" name="amount" type="number" class="mt-1 block w-full border p-2 rounded" />
+          </div>
+          <button (click)='sendTransaction()' [disabled]="loading" class="w-full bg-[#ec1c24] text-white font-bold py-2 rounded">
+            {{ loading ? 'Processando...' : 'Autorizar Compra' }}
+          </button>
+        </div>
+      </section>
+      <section class="bg-white p-6 rounded-lg shadow-sm">
+        <h2 class="text-lg font-semibold mb-4 border-b pb-2">Status</h2>
+        <div *ngIf="result" [ngClass]="result.status === 'APPROVED' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'" class="p-4 rounded border-2">
+          <p class="font-bold">{{ result.status === 'APPROVED' ? '✅ Aprovada' : '❌ Rejeitada' }}</p>
+          <p class="text-xs mt-2">ID: {{ result.transactionId }}</p>
+          <p *ngIf="result.reason" class="text-xs text-red-600 mt-1">{{ result.reason }}</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>

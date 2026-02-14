@@ -16,6 +16,11 @@ minikube start --driver=docker --base-image="gcr.io/k8s-minikube/kicbase:v0.0.48
 echo "🔨 Gerando pacote JAR com Maven..."
 mvn clean package -DskipTests
 
+echo "📊 Relatório de cobertura gerado em: target/site/jacoco/index.html"
+mvn test -Dtest=TransactionServiceTest
+# Opcional: printar a cobertura no terminal (exemplo simples)
+grep -o 'Total[^%]*%' target/site/jacoco/index.html | head -1 || echo "Cobertura calculada."
+
 echo "🐳 Construindo imagem Docker da API..."
 docker build -t card-system-api:1.0 .
 
@@ -33,7 +38,7 @@ echo "⏳ Aguardando os Pods ficarem prontos..."
 minikube kubectl -- wait --for=condition=ready pod -l app=card-api --timeout=120s
 
 echo "✅ Ambiente pronto! Iniciando Port-Forward..."
-echo "Acesse em: http://localhost:8080"
+echo "Acesse em: http://vmlinuxd:8080"
 
 # O port-forward bloqueia o terminal. 
 # Rodamos o comando service em background para não travar o script.

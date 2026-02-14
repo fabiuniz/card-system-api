@@ -99,7 +99,7 @@ mkdir -p {postgres-init,mysql-init,mongo-init,pgadmin-config}
 # d. CI/CD & RECURSOS
 mkdir -p {.github/workflows,scripts,src/main/resources}
 #IoT
-mkdir -p {iot/esp01_monitor/}
+mkdir -p iot/esp01_monitor/
 #IA
 mkdir -p {aiops/brain,aiops/vector_db,aiops/config}
 echo "✅ Estrutura de pastas higienizada!"

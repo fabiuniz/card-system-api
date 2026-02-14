@@ -1,0 +1,14 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "Postgres-Santander",
+            "Group": "Servers",
+            "Host": "postgresdb",
+            "Port": 5432,
+            "MaintenanceDB": "santander_system",
+            "Username": "admin",
+            "SSLMode": "prefer",
+            "PassFile": "/tmp/pgpassfile"
+        }
+    }
+}

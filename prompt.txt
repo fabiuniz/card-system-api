@@ -1,11 +1,11 @@
 1) Tenho esse projeto e queria continuar o você precisa para ter contexto para me ajudar ?
 Já posso adiantar que esses arquivos: 
 
-setup_utils.sh
-setup_databases.sh
 setup_application.sh
-setup_analyses.sh
+setup_utils.sh
 setup_iaas.sh
+setup_databases.sh
+setup_analyses.sh
 
 Os arquivo ".sh" controem todos outros informe se houver mais algum .sh para fechar o contexto.
 são essenciais me peça cada um deles que não encontrar em "Nested Scripts" até você fechar o contexto!
@@ -21,11 +21,24 @@ card-system-api/
 │       ├── dev.nix
 │   ├── Dockerfile
 │   ├── README.md
-│   ├── add_knowledge.sh
 │   aiops/
 │   │   ├── Dockerfile.ai
+│   │   ├── add_knowledge.sh
 │   │   brain/
+│   │   ├── cfg_service.sh
+│   │   ├── check_infra.sh
 │   │   config/
+│   │   ├── dashboard.py
+│   │   ├── docker-compose.yml
+│   │   ollama/
+│   │   │   ├── Dockerfile.ai
+│   │   │   ├── add_knowledge.sh
+│   │   │   ├── cfg_service.sh
+│   │   │   ├── check_infra.sh
+│   │   │   ├── dashboard.py
+│   │   │   ├── docker-compose.yml
+│   │   │   ├── predictive_agent_rag.py
+│   │       ├── reindex_brain.py
 │   │   ├── predictive_agent_rag.py
 │   │   ├── reindex_brain.py
 │       vector_db/
@@ -88,7 +101,6 @@ card-system-api/
 │   ├── clear_all_service.sh
 │   ├── clearfolder.sh
 │   ├── deploy_infra.sh
-│   ├── docker-compose.yml
 │   ├── flow.md
 │   images/
 │   │   ├── fluxo.png
@@ -102,7 +114,6 @@ card-system-api/
 │   k8s/
 │   │   ├── deployment.yaml
 │   │   ├── hpa.yaml
-│   │   ├── minikube-linux-amd64
 │       ├── service.yaml
 │   ├── minikube-linux-amd64
 │   mongo-init/
@@ -203,6 +214,7 @@ card-system-api/
 │   │   ├── setup_terraform.sh
 │       ├── terraform.tfvars
     ├── testedb.sh
+
 
 Esse é o setup_project.sh :
 
@@ -448,9 +460,10 @@ echo "--------------------------"
 
 echo 'start chrome --incognito "https://gemini.google.com/" "http://vmlinuxd:8081" "http://vmlinuxd:3000" "http://vmlinuxd:9090/targets" "http://vmlinuxd:8080/swagger-ui/index.html" "http://vmlinuxd:4000" "http://vmlinuxd:4200" "http://vmlinuxd:4300" "http://vmlinuxd:8082" "http://vmlinuxd:8083" "http://vmlinuxd:8084"'
 
-2. Ok! Agora que sabe o contexto dessa estrutura onde o centro é setup_application.sh e o setup_project.sh é o construtor, onde devo fazer jus de todo esse trabalho ?. Quero que comece me ajude a
+2. Após! receber todo o contexto dessa estrutura que é o ponto de partida (setup_project.sh é o construtor) para atender a aplicação (setup_application.sh). Quero que comece me ajude a ...
 
-veriaficar se a extrutura de persistencia Hexagonal está como o proposto!
+a) Verificar se a extrutura de persistencia Hexagonal está como o proposto!
+b) meu docker composer e a versão 3
 
 3. Após a Entrega Final: Crie também um fluxo inerente ao tema principal que realmente tenha relevância e faça um fluxo semelhante ao exemplo logo abaixo com a estrutura de (https://mermaid.live/edit) dê o linkd desse endereço logo acima.  **Regra Mermaid: O nome/título de um 'subgraph' deve ser sempre envolvido por aspas duplas (ex: subgraph "Título com Espaços sem parenteses ou aspas").** Use a estrutura abaixo somente como um exemplo a seguir, "O conteúdo de cada nó deve ser listado exatamente como abaixo, sem adicionar parênteses:". 
 flowchart TD

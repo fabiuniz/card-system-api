@@ -115,7 +115,7 @@ calcular_espaco_projeto
 #docker load -i nginx_latest.tar
 #docker load -i node18_16_alpine.tar
 #docker load -i node_18-alpine.tar
-#docker load -i mongo-express
+#docker load -i mongo-express.tar
 #docker load -i pgadmin4.tar
 #docker load -i phpmyadmin.tar
 #

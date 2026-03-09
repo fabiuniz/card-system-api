@@ -116,7 +116,7 @@ brain/
 EOF
 
 # 5. GERANDO O UTILITÁRIO add_knowledge.sh
-cat <<'EOF' > add_knowledge.sh
+cat <<'EOF' > aiops/ollama/add_knowledge.sh
 #!/bin/bash
 if [ -z "$1" ]; then
     echo "Uso: ./add_knowledge.sh 'Minha instrução para a IA'"
@@ -134,48 +134,36 @@ echo "$1" | sudo tee ./brain/memo_$(date +%s).md > /dev/null
 docker exec -it ai-agent python3 reindex_brain.py
 echo "✅ IA atualizada!"
 EOF
-chmod +x add_knowledge.sh
 chmod +x aiops/ollama/add_knowledge.sh
 
-
-# 6. GERANDO O DOCKER-COMPOSE COMPLETO
+# 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
 cat <<EOF > aiops/ollama/docker-compose.yml
 version: '3'
-
 services:
-  ollama-server:
-    image: ollama/ollama:latest
+  ollama-server:    
+    image: ollama/ollama:0.17.4
     container_name: ollama-server
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: always
-    # O segredo para v3 com GPU no Docker Engine local:
-    runtime: nvidia 
     ports:
       - "11434:11434"
     volumes:
-      - ./ollama_data:/root/.ollama
+      # Caminho absoluto para garantir que não baixe de novo
+      - \${PWD}/ollama_data:/root/.ollama
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - OLLAMA_HOST=0.0.0.0
 
   ai-agent:
-    build:
-      context: .
-      dockerfile: Dockerfile.ai
+    image: sre-cortex-agent:v1.0
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.ai
     container_name: ai-agent
     depends_on:
       - ollama-server
     environment:
       - OLLAMA_URL=http://ollama-server:11434/api/generate
-    volumes:      
+    volumes:          
       - .:/app
-      - ./pip_cache:/root/.cache/pip
     ports:
       - "8501:8501"
 EOF
@@ -200,7 +188,7 @@ docker exec -it ollama-server ollama run phi3:mini "Olá Córtex!"
 #   "stream": false
 # }'
 EOF
-chmod +x cfg_service.sh
+chmod +x aiops/ollama/cfg_service.sh
 
 cat <<EOF > aiops/ollama/dashboard.py
 import streamlit as st
@@ -213,7 +201,8 @@ st.title("🤖 SRE Córtex - Painel Preditivo")
 
 # Sidebar com Status do Hardware
 st.sidebar.header("Status da Infra")
-st.sidebar.metric("GPU (GTX 760)", "2GB VRAM", "Ativa")
+st.sidebar.metric("GPU Status", "Incompatível", "Legacy/Kepler")
+st.sidebar.metric("Motor de Inferência", "Xeon E5 (CPU)", "AVX Ativo")
 st.sidebar.metric("CPU (Xeon E5)", "12 Threads", "Normal")
 
 # Área de Métricas em Tempo Real
@@ -245,6 +234,7 @@ EOF
 
 echo "--------------------------------------------------------"
 echo "✅ TUDO PRONTO! O Cérebro RAG foi configurado."
+echo "Na pasta: cd aiops/ollama"
 echo "1. Execute 'docker-compose up -d' para subir a IA."
 echo "2. Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
 echo "2.1 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
@@ -321,30 +311,105 @@ git fetch origin
 git switch feat/add-iot-ia
 # 7. Download das Imagens (Ollama e Python)
 echo "📥 Baixando imagens Docker (Isso pode demorar)..."
-sudo docker pull ollama/ollama:latest
+sudo docker pull ollama/ollama:0.17.4
 sudo docker pull python:3.9-slim
 # 8. Exportação para .tar (Backup na pasta relay)
 echo "💾 Gerando arquivos .tar para backup..."
-sudo docker save -o /home/userlnx/docker/relay/ollama_latest.tar ollama/ollama:latest
-sudo docker save -o /home/userlnx/docker/relay/python_base.tar python:3.9-slim
+#sudo docker save -o /home/userlnx/docker/relay/ollama_latest.tar ollama/ollama:0.17.4
+#sudo docker save -o /home/userlnx/docker/relay/python_base.tar python:3.9-slim
 echo "✅ AMBIENTE PREPARADO COM SUCESSO!"
 echo "Próximo passo: Execute 'newgrp docker' e depois suba o docker-compose."
 echo "🚀 Subindo containers..."
+sudo chmod -R 777 /home/userlnx/docker/relay/card-system-api/aiops/ollama/ollama_data
+cd /home/userlnx/docker/relay/card-system-api/aiops/ollama
 export DOCKER_BUILDKIT=1
 docker-compose up -d
 # Aguarda 10 segundos para o serviço do Ollama estabilizar
 echo "⏳ Aguardando o servidor Ollama iniciar..."
-sleep 10
+# Aguarda o Ollama responder antes de tentar verificar o modelo
+echo "⏳ Aguardando o motor Ollama iniciar (Xeon Mode)..."
+for i in {1..20}; do
+    if docker exec ollama-server ollama list >/dev/null 2>&1; then
+        echo "✅ Motor Ollama Online!"
+        break
+    fi
+    echo "..."
+    sleep 2
+done
+#echo "🧠 Baixando e iniciando o modelo Phi-3 (Otimizado para GTX 760)..."
 echo "🧠 Baixando e iniciando o modelo Phi-3 (Otimizado para GTX 760)..."
-docker exec -it ollama-server ollama run phi3:mini 
+# Agora verifica o modelo com segurança
+if docker exec ollama-server ollama list | grep -q "phi3"; then
+    echo "✅ Modelo Phi-3 já encontrado localmente. Pulando download."
+else
+    echo "📥 Modelo não encontrado. Iniciando download..."
+    docker exec -it ollama-server ollama pull phi3:mini
+fi
 # docker exec -it ollama-server ollama run phi3:mini "Olá Córtex, confirme sua versão."
 echo "✅ AMBIENTE PREPARADO E IA RODANDO!"
 echo "watch -n 1 nvidia-smi"
 echo 'New-NetFirewallRule -DisplayName "IA-Agent-Dashboard" -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow'
-echo "localhost:8501"
+echo "top -b -n 1 | head -n 20"
+# Captura o IP dinâmico do WSL (Interface eth0)
+WSL_IP=$(ip addr show eth0 | grep "inet " | awk '{print $2}' | cut -d/ -f1)
+echo "--------------------------------------------------------"
+echo "🚀 DASHBOARD SRE CÓRTEX ESTÁ PRONTO!"
+echo "--------------------------------------------------------"
+echo "🌐 Acesso Local (Windows): http://localhost:8501"
+echo "🌐 Acesso na Rede (WSL IP): http://$WSL_IP:8501"
+echo "--------------------------------------------------------"
 EOF
+chmod +x aiops/ollama/setup_ia.sh
 
-cat <<'EOF' > aiops/ollama/prepare_ia.sh
+cat <<'EOF' > aiops/ollama/setup_AVX.sh
+# --- AJUSTE DE SEGURANÇA: RESET DO RUNTIME ---
+# Remove a tentativa do Docker de usar a GPU Kepler que falhou no NVML
+if [ -f /etc/docker/daemon.json ]; then
+    echo "⚙️ Resetando Docker Runtime para 'runc' (Segurança para Hardware Legacy)..."
+    sudo sed -i 's/"default-runtime": "nvidia"//g' /etc/docker/daemon.json
+    # Remove vírgulas extras que podem sobrar no JSON
+    sudo sed -i 's/{ ,/{ /g' /etc/docker/daemon.json
+    sudo systemctl restart docker
+fi
+EOF
+chmod +x aiops/ollama/setup_AVX.sh
+
+cat <<'EOF' > aiops/ollama/setup_nvidia.sh
+#!/bin/bash
+echo "🚀 Iniciando a configuração do NVIDIA Container Toolkit para Debian..."
+# 1. Limpeza de repositórios antigos
+sudo rm -f /etc/apt/sources.list.d/nvidia-container-toolkit.list
+# 2. Configurando a chave e o repositório oficial (Debian/Ubuntu)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+# 3. Instalando o Toolkit
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo apt install htop -y
+# 4. Configurando o Docker para usar o Runtime da NVIDIA como padrão
+# Isso evita o erro de 'shim task' no docker-compose
+sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
+# 5. Ajuste de compatibilidade para Drivers e Cgroups (Essencial para Debian)
+if [ -f /etc/nvidia-container-runtime/config.toml ]; then
+    sudo sed -i 's/no-cgroups = false/no-cgroups = true/g' /etc/nvidia-container-runtime/config.toml
+fi
+# 6. Reiniciando o serviço do Docker (Linux Nativo)
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+echo "✅ Configuração aplicada! Tentando subir o Ollama na GPU..."
+# 7. Subindo o container
+cd aiops/ollama
+docker-compose down --remove-orphans
+docker-compose up -d
+
+echo "📊 Verificando logs do container..."
+docker logs ollama-server --tail 20
+EOF
+chmod +x aiops/ollama/setup_nvidia.sh
+
+cat <<'EOF' > aiops/ollama/prepare_ia.ps1
 # 1. Habilitar Recursos do Windows
 dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
 dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
@@ -359,18 +424,10 @@ echo "--- Reinicie o computador se for a primeira vez habilitando o WSL ---"
 # Limpa as rotas antigas
 netsh interface portproxy reset
 # Cria a rota nova para o IP do seu Linux
-netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8501 connectaddress=192.168.137.2 connectport=8501
-EOF
-
-cat <<'EOF' > aiops/ollama/fix_cortex.sh
-#!/bin/bash
-# 1. Desliga tudo
-docker-compose down
-# 2. Reinicia o suporte a GPU no Docker (via terminal)
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-# 3. Limpa caches mortos que ocupam espaço no SSD
-docker system prune -f
-# 4. Sobe novamente
-docker-compose up -d
+#netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8501 connectaddress=192.168.137.2 connectport=8501
+#netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=11434 connectaddress=127.0.0.1 connectport=11434
+#netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8501 connectaddress=127.0.0.1 connectport=8501
+# Habilita a comunicação da porta da IA para a rede externa
+# Garante que o WSL está atualizado (O driver da GPU depende disso)
+wsl --update
 EOF

@@ -121,19 +121,34 @@ cat <<EOF > aiops/ollama/docker-compose.yml
 version: '3'
 services:
   ollama-server:    
-    image: ollama/ollama:0.17.4
+    image: ollama/ollama:0.1.45
     container_name: ollama-server
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - OLLAMA_DEBUG=1
+      - OLLAMA_NUM_GPU=1
+      - NVIDIA_DISABLE_REQUIRE=true 
+      - CUDA_CACHE_DISABLE=1
+      - OLLAMA_LLM_LIBRARY=cuda_v11
     restart: always
     ports:
       - "11434:11434"
     volumes:
-      - "/mnt/y/Virtual Machines/ollama/ollama_data:/root/.ollama"
-      #- /home/userlnx/docker/ollama_data:/root/.ollama # Use o caminho nativo Linux!
+      - /home/userlnx/docker/ollama_data:/root/.ollama
+      #- "/mnt/y/Virtual Machines/ollama/ollama_data:/root/.ollama"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   ai-agent:
-    image: ollama-ai-agent:v1.0-gold  # <--- Sua imagem de 8GB protegida
+    image: ollama-ai-agent:v1.0-gold
     container_name: ai-agent
-    pull_policy: never  # <--- Garante que ele nunca use a internet para buscar essa imagem
+    pull_policy: never
     environment:
       - OLLAMA_URL=http://ollama-server:11434/api/generate
     entrypoint: ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
@@ -142,7 +157,7 @@ services:
     ports:
       - "8501:8501"
     volumes:          
-      - .:/app  # <--- Isso permite alterar o código sem precisar de build!
+      - .:/app
 EOF
 
 # Indexa os manuais iniciais do Santander no banco de dados vetorial.
@@ -276,20 +291,20 @@ cat <<'EOF' > aiops/ollama/setup_ia.sh
 echo "🚀 Iniciando Preparação do Ambiente SRE Córtex no Debian..."
 
 # 1. Atualização de Repositórios
-sudo apt update && sudo apt upgrade -y
+apt update && apt upgrade -y
 
 # 2. Instalação de Dependências Essenciais
-sudo apt install -y cifs-utils git docker.io docker-compose
+apt install -y cifs-utils git docker.io docker-compose
 
 # 3. Configuração de Permissões do Docker
-sudo usermod -aG docker $USER
+usermod -aG docker $USER
 
 # 4. Criando Estrutura de Pastas
 mkdir -p /home/userlnx/docker/relay
-sudo chmod -R 777 /home/userlnx/docker/relay
+chmod -R 777 /home/userlnx/docker/relay
 
 # 5. Montagem do Disco Y (Onde estão suas VMs e o projeto)
-sudo mount --bind "/mnt/y/Virtual Machines" /home/userlnx/docker/relay || echo "⚠️ Falha ao montar via bind. Verifique se o disco Y está acessível."
+mount --bind "/mnt/y/Virtual Machines" /home/userlnx/docker/relay || echo "⚠️ Falha ao montar via bind. Verifique se o disco Y está acessível."
 
 # 6. Clonagem e Branch
 cd /home/userlnx/docker/relay
@@ -318,7 +333,7 @@ echo "✅ AMBIENTE PREPARADO!"
 
 # 8. SUBIDA DOS CONTAINERS
 echo "🚀 Subindo containers..."
-sudo chmod -R 777 /home/userlnx/docker/relay/card-system-api/aiops/ollama/ollama_data 2>/dev/null || true
+chmod -R 777 /home/userlnx/docker/relay/card-system-api/aiops/ollama/ollama_data 2>/dev/null || true
 
 # Entra na pasta onde o docker-compose.yml REALMENTE está
 cd /home/userlnx/docker/relay/card-system-api/aiops/ollama
@@ -351,7 +366,8 @@ else
 fi
 
 echo "✅ IA RODANDO!"
-WSL_IP=$(ip addr show eth0 | grep "inet " | awk '{print $2}' | cut -d/ -f1)
+WSL_IP=$(ip addr show eth0 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1); 
+WSL_IP=$(hostname);
 echo "--------------------------------------------------------"
 echo "🚀 DASHBOARD SRE CÓRTEX: http://$WSL_IP:8501"
 echo "--------------------------------------------------------"
@@ -361,37 +377,44 @@ chmod +x aiops/ollama/setup_ia.sh
 # Ele vai instalar o Toolkit da NVIDIA para o Docker
 cat <<'EOF' > aiops/ollama/setup_nvidia.sh
 #!/bin/bash
-echo "🚀 Iniciando a configuração do NVIDIA Container Toolkit para Debian..."
-# 1. Limpeza de repositórios antigos
-sudo rm -f /etc/apt/sources.list.d/nvidia-container-toolkit.list
-# 2. Configurando a chave e o repositório oficial (Debian/Ubuntu)
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-# 3. Instalando o Toolkit
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-sudo apt install htop -y
-# 4. Configurando o Docker para usar o Runtime da NVIDIA como padrão
-# Isso evita o erro de 'shim task' no docker-compose
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+echo -e "${GREEN}🚀 Iniciando Configuração de GPU Legacy (Kepler) para Docker...${NC}"
+# 1. Validação de Sanidade do Driver
+if ! nvidia-smi &> /dev/null; then
+    echo -e "${RED}❌ Erro: O driver NVIDIA (Tesla 470) não está carregado corretamente.${NC}"
+    echo "Tente rodar: sudo modprobe nvidia-tesla-470"
+    exit 1
+fi
+echo -e "${GREEN}✅ Driver 470 Ativo!${NC}"
+# 2. Re-instalação/Atualização do Toolkit (Garante que a biblioteca case com o driver)
+echo "📦 Validando NVIDIA Container Toolkit..."
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+# 3. Configuração do Docker Runtime
+# Forçamos o runtime nvidia como padrão para evitar que o Ollama tente usar o 'runc' puro
+echo "⚙️ Configurando Docker Runtime..."
 sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
-# 5. Ajuste de compatibilidade para Drivers e Cgroups (Essencial para Debian)
+sudo nvidia-ctk runtime configure --runtime=docker
+# 4. Ajuste de Compatibilidade Kepler (Cgroups v1/v2 fix)
 if [ -f /etc/nvidia-container-runtime/config.toml ]; then
+    echo "🔧 Aplicando patch no config.toml (no-cgroups = true)..."
     sudo sed -i 's/no-cgroups = false/no-cgroups = true/g' /etc/nvidia-container-runtime/config.toml
 fi
-# 6. Reiniciando o serviço do Docker (Linux Nativo)
+# 5. Reinício dos serviços
+echo "🔄 Reiniciando serviços..."
 sudo systemctl daemon-reload
 sudo systemctl restart docker
-echo "✅ Configuração aplicada! Tentando subir o Ollama na GPU..."
-# 7. Subindo o container
-cd aiops/ollama
-docker-compose down --remove-orphans
-docker tag a24ca7b8f5db ollama-ai-agent:v1.0-gold
-docker-compose up -d
-
-echo "📊 Verificando logs do container..."
-docker logs ollama-server --tail 20
+# 6. Deploy do Ollama (Usando o caminho corrigido)
+echo -e "${GREEN}🐳 Subindo containers do Ollama...${NC}"
+# Correção do readlink para Debian
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+cd "$SCRIPT_DIR"
+docker compose down --remove-orphans
+docker compose up -d
+echo -e "${GREEN}✅ Script concluído! Aguardando inicialização do NVML...${NC}"
+sleep 8
+docker logs ollama-server --tail 20 | grep -E "gpu|vram|compute"
 EOF
 chmod +x aiops/ollama/setup_nvidia.sh
 
@@ -401,10 +424,10 @@ cat <<'EOF' > aiops/ollama/setup_AVX.sh
 # Remove a tentativa do Docker de usar a GPU Kepler que falhou no NVML
 if [ -f /etc/docker/daemon.json ]; then
     echo "⚙️ Resetando Docker Runtime para 'runc' (Segurança para Hardware Legacy)..."
-    sudo sed -i 's/"default-runtime": "nvidia"//g' /etc/docker/daemon.json
+    sed -i 's/"default-runtime": "nvidia"//g' /etc/docker/daemon.json
     # Remove vírgulas extras que podem sobrar no JSON
-    sudo sed -i 's/{ ,/{ /g' /etc/docker/daemon.json
-    sudo systemctl restart docker
+    sed -i 's/{ ,/{ /g' /etc/docker/daemon.json
+    systemctl restart docker
 fi
 EOF
 chmod +x aiops/ollama/setup_AVX.sh
@@ -454,11 +477,11 @@ if [ -z "$1" ]; then
     echo "Uso: ./add_knowledge.sh 'Minha instrução para a IA'"
     exit 1
 fi
-# 1. Garante que a pasta existe com permissão total usando sudo
-sudo mkdir -p ./brain
-sudo chmod 777 ./brain
-# 2. Escreve o arquivo usando sudo para evitar o 'Permission denied'
-echo "$1" | sudo tee ./brain/memo_$(date +%s).md > /dev/null
+# 1. Garante que a pasta existe com permissão total usando 
+mkdir -p ./brain
+chmod 777 ./brain
+# 2. Escreve o arquivo usando para evitar o 'Permission denied'
+echo "$1" | tee ./brain/memo_$(date +%s).md > /dev/null
 # 3. Sincroniza com o container
 docker exec -it ai-agent python3 reindex_brain.py
 echo "✅ IA atualizada!"
@@ -557,3 +580,26 @@ chmod +x aiops/ollama/check_infra.sh
 # winpty wsl.exe -d Debian_FBI -u userlnx
 # ip a | grep inet
 # cd "/mnt/y/Virtual Machines/card-system-api"
+
+# root@pc-linux:/home/userlnx/docker/script_docker/card-system-api/aiops/ollama# docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+#Thu Apr 30 18:28:24 2026
+#+-----------------------------------------------------------------------------+
+#| NVIDIA-SMI 470.256.02   Driver Version: 470.256.02   CUDA Version: 12.4     |
+#|-------------------------------+----------------------+----------------------+
+#| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+#| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+#|                               |                      |               MIG M. |
+#|===============================+======================+======================|
+#|   0  NVIDIA GeForce ...  Off  | 00000000:03:00.0 N/A |                  N/A |
+#| 47%   42C    P0    N/A /  N/A |      0MiB /  1998MiB |     N/A      Default |
+#|                               |                      |                  N/A |
+#+-------------------------------+----------------------+----------------------+
+#
+#+-----------------------------------------------------------------------------+
+#| Processes:                                                                  |
+#|  GPU   GI   CI        PID   Type   Process name                  GPU Memory |
+#|        ID   ID                                                   Usage      |
+#|=============================================================================|
+#|  No running processes found                                                 |
+#+-----------------------------------------------------------------------------+
+root@pc-linux:/home/userlnx/docker/script_docker/card-system-api/aiops/ollama#

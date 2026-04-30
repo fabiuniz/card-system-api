@@ -110,7 +110,7 @@ calcular_espaco_projeto
 #docker load -i mongo.tar
 #docker load -i postgres_14-alpine.tar
 #docker load -i prom_prometheus.tar
-#docker load -i grafana_latest.tar
+#docker load -i grafana.tar
 #docker load -i amazoncorretto_11_alpine.tar
 #docker load -i nginx_latest.tar
 #docker load -i node18_16_alpine.tar
@@ -118,6 +118,10 @@ calcular_espaco_projeto
 #docker load -i mongo-express.tar
 #docker load -i pgadmin4.tar
 #docker load -i phpmyadmin.tar
+#docker load -i ollama_ollama_0_17_4.tar
+#docker load -i ollama_ai-agent_latest.tar
+#docker load -i nvidia_cuda_12_4_1-base-ubuntu22_04.tar
+
 #
 #Total reclaimed space: 232.2MB
 #root@vmlinuxd:/home/userlnx/docker/script_docker/card-system-api# docker images

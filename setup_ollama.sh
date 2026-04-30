@@ -128,6 +128,7 @@ services:
       - "11434:11434"
     volumes:
       - "/mnt/y/Virtual Machines/ollama/ollama_data:/root/.ollama"
+      #- /home/userlnx/docker/ollama_data:/root/.ollama # Use o caminho nativo Linux!
 
   ai-agent:
     image: ollama-ai-agent:v1.0-gold  # <--- Sua imagem de 8GB protegida
@@ -552,3 +553,7 @@ chmod +x aiops/ollama/check_infra.sh
 #netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8501 connectaddress=127.0.0.1 connectport=8501
 
 #Minha internet é 100 GB de franquina poupe meus recursos
+# wsl -d Debian_FBI -u userlnx
+# winpty wsl.exe -d Debian_FBI -u userlnx
+# ip a | grep inet
+# cd "/mnt/y/Virtual Machines/card-system-api"

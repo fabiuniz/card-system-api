@@ -116,8 +116,48 @@ brain/
 *.tar
 EOF
 
+# GERANDO O DOCKER-COMPOSE OTIMIZADO PARA AMD RX 580
+cat <<EOF > aiops/ollama/docker-compose_rx580.yml
+version: '3'
+services:
+  ollama-server:    
+    image: ollama/ollama:rocm
+    container_name: ollama-server
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=8.0.3  # Essencial para a RX 580 ser aceita
+      - OLLAMA_DEBUG=1
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - /home/userlnx/docker/ollama_data:/root/.ollama
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri:/dev/dri"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: amd
+              count: all
+              capabilities: [gpu]
+
+  ai-agent:
+    image: ollama-ai-agent:v1.0-gold
+    container_name: ai-agent
+    pull_policy: never
+    environment:
+      - OLLAMA_URL=http://ollama-server:11434/api/generate
+    depends_on:
+      - ollama-server
+    ports:
+      - "8501:8501"
+    volumes:          
+      - .:/app
+EOF
+
 # 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
-cat <<EOF > aiops/ollama/docker-compose.yml
+cat <<EOF > aiops/ollama/docker-compose_gtx760.yml
 version: '3'
 services:
   ollama-server:    
@@ -170,19 +210,22 @@ import psutil
 import os
 import subprocess
 
-# Configuração da Página
 st.set_page_config(page_title="SRE Córtex - Santander", layout="wide")
 st.title("🤖 SRE Córtex - Painel Preditivo")
 
-# --- DETECÇÃO DE GPU (NVIDIA GTX 760) ---
 def get_gpu_info():
     try:
-        # Tenta rodar o comando da NVIDIA
+        # Tenta NVIDIA
         gpu_raw = subprocess.check_output("nvidia-smi --query-gpu=name --format=csv,noheader", shell=True).decode()
-        return gpu_raw.strip(), "Aceleração CUDA Ativa"
+        return gpu_raw.strip(), "Aceleração CUDA (GTX 760)"
     except:
-        # Se falhar, como sabemos que sua placa é a GTX 760, forçamos o rótulo correto
-        return "NVIDIA GTX 760 2GB (Legacy)", "Modo Kepler Otimizado"
+        try:
+            # Tenta AMD (Verifica se o dispositivo de render existe)
+            if os.path.exists("/dev/dri/renderD128"):
+                return "AMD Radeon RX 580 8GB", "Aceleração ROCm (Polaris)"
+        except:
+            pass
+    return "Executando em CPU", "Modo Xeon (AVX2)"
 
 gpu_label, motor = get_gpu_info()
 
@@ -190,8 +233,22 @@ gpu_label, motor = get_gpu_info()
 st.sidebar.header("📡 Status da Infra Local")
 
 # Detecta Processador e Threads
-cpu_info = platform.processor() or "Intel Xeon E5-2420"
-st.sidebar.metric("Processador", f"{cpu_info[:15]}...", f"{os.cpu_count()} Threads")
+# No dashboard.py, procure a parte do cpu_info e substitua por:
+def get_detailed_cpu():
+    try:
+        # Tenta ler diretamente do sistema de arquivos do Linux (mais preciso no WSL)
+        with open("/proc/cpuinfo", "r") as f:
+            for line in f:
+                if "model name" in line:
+                    return line.split(":")[1].strip()
+    except:
+        return platform.processor()
+
+cpu_model = get_detailed_cpu()
+# Exibe no Sidebar sem cortes bruscos
+st.sidebar.subheader("💻 Processador")
+st.sidebar.info(f"{cpu_model}")
+st.sidebar.write(f"**Threads:** {os.cpu_count()} | **Arquitetura:** {platform.machine()}")
 
 # Detecta RAM Total e Livre
 mem = psutil.virtual_memory()
@@ -251,8 +308,8 @@ st.table(pd.DataFrame({
 EOF
 echo "--------------------------------------------------------"
 echo "✅ TUDO PRONTO! O Cérebro RAG foi configurado."
-echo "Na pasta: cd aiops/ollama"
-echo "1. Execute 'docker-compose up -d' para subir a IA."
+echo "1. Execute 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d' para subir a IA."
+echo "1.1 Ou 'docker compose -f aiops/ollama/docker-compose_rx580.yml up -d' ."
 echo "2. Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
 echo "2.1 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
 echo "3. Use './add_knowledge.sh' para afinar o agente em tempo real."
@@ -418,6 +475,33 @@ docker logs ollama-server --tail 20 | grep -E "gpu|vram|compute"
 EOF
 chmod +x aiops/ollama/setup_nvidia.sh
 
+# Ele vai instalar o Toolkit da RX 580 no Debian para o Docker
+# Script de Setup para GPU AMD (RX 580) no Debian/WSL
+cat <<'EOF' > aiops/ollama/setup_amd.sh
+#!/bin/bash
+GREEN='\033[0;32m'
+NC='\033[0m'
+echo -e "${GREEN}🚀 Preparando Kernel para RX 580 (MODO ROCm)...${NC}"
+
+# 1. Instala dependências de renderização AMD
+sudo apt-get update && sudo apt-get install -y libnuma-dev libdrm-amdgpu1 mesa-va-drivers clinfo
+
+# 2. Permissões de hardware
+sudo usermod -aG video $USER
+sudo usermod -aG render $USER
+
+# 3. Patch para arquitetura Polaris (RX 580)
+if ! grep -q "HSA_OVERRIDE_GFX_VERSION" /etc/environment; then
+    echo "HSA_OVERRIDE_GFX_VERSION=8.0.3" | sudo tee -a /etc/environment
+fi
+
+# 4. Sobe o container específico
+cd "$(dirname "$0")"
+docker-compose -f docker-compose_rx580.yml up -d
+echo -e "${GREEN}✅ RX 580 Ativada! Verifique com: docker logs ollama-server${NC}"
+EOF
+chmod +x aiops/ollama/setup_amd.sh
+
 # Rodar logo após o setup da NVIDIA. Ele garante que, se a GTX 760 falhar por ser antiga, o Docker use o modo "runc" estável para o Xeon não travar.
 cat <<'EOF' > aiops/ollama/setup_AVX.sh
 # --- AJUSTE DE SEGURANÇA: RESET DO RUNTIME ---
@@ -432,6 +516,7 @@ fi
 EOF
 chmod +x aiops/ollama/setup_AVX.sh
 
+
 # Passo 3: Inicialização dos Serviços
 # # ------------------------------------------------------------------------------------
 # Este script vai dar o docker-compose up -d e fazer o pull dos modelos (TinyLlama, Phi3).
@@ -443,7 +528,17 @@ cat <<EOF > aiops/ollama/cfg_service.sh
 #   2. Abre o Firewall do Windows para a porta da IA
 #   New-NetFirewallRule -DisplayName "SRE-Cortex-IA" -Direction Inbound -LocalPort 11434 -Protocol TCP -Action Allow
 docker tag a24ca7b8f5db ollama-ai-agent:v1.0-gold
-docker-compose up -d
+echo "Escolha o Hardware:"
+echo "1) NVIDIA GTX 760 (CUDA)"
+echo "2) AMD RX 580 (ROCm)"
+read -p "Opção: " hardware
+if [ "\$hardware" == "1" ]; then
+    docker-compose -f docker-compose_gtx760.yml up -d
+    echo "Subindo modo NVIDIA..."
+else
+    docker-compose -f docker-compose_rx580.yml up -d
+    echo "Subindo modo AMD..."
+fi
 echo "📥 Baixando biblioteca de modelos para o Córtex..."
 # Detecta a RAM total antes de baixar
 RAM_TOTAL=\$(free -g | awk '/^Mem:/{print $\2}')
@@ -496,11 +591,19 @@ LOG_FILE="check_infra.log"
     clear
     echo -e "\n\033[1;34m--- [REPORT DE HARDWARE: SRE CÓRTEX] ---\033[0m"
     echo "Data do Registro: $(date '+%d/%m/%Y %H:%M:%S')"
-    # CPU
-    CPU_MODEL=$(wmic cpu get name | sed -n '2p' | xargs)
-    echo -e "Modelo CPU: \033[1;32m$CPU_MODEL\033[0m"
-    echo "Threads/Cores: $(nproc)"
-    echo "Instruções: AVX detectado (Suporte para Ollama)"
+    # CPU Identification
+    echo -ne "Modelo CPU: "
+    if command -v lscpu > /dev/null; then
+        # Pega o nome comercial completo do Xeon
+        CPU_FULL=$(lscpu | grep "Model name" | cut -d':' -f2 | xargs)
+        echo -e "\033[1;32m$CPU_FULL\033[0m"
+    else
+        echo -e "\033[1;31mNão foi possível identificar via lscpu\033[0m"
+    fi
+
+    # Threads e Cores
+    CORES=$(nproc)
+    echo "Threads lógicas disponíveis: $CORES"
     # RAM Total
     RAM_RAW=$(wmic computersystem get TotalPhysicalMemory | sed -n '2p' | tr -d '\r' | xargs)
     RAM_GB=$(awk "BEGIN {printf \"%.2f\", $RAM_RAW/1024/1024/1024}")

@@ -118,29 +118,21 @@ EOF
 
 # GERANDO O DOCKER-COMPOSE OTIMIZADO PARA AMD RX 580
 cat <<EOF > aiops/ollama/docker-compose_rx580.yml
-version: '3'
 services:
-  ollama-server:    
+  ollama-server:
     image: ollama/ollama:rocm
     container_name: ollama-server
-    environment:
-      - HSA_OVERRIDE_GFX_VERSION=8.0.3  # Essencial para a RX 580 ser aceita
-      - OLLAMA_DEBUG=1
     restart: always
     ports:
       - "11434:11434"
     volumes:
       - /home/userlnx/docker/ollama_data:/root/.ollama
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=8.0.3
+      - OLLAMA_DEBUG=1
     devices:
       - "/dev/kfd:/dev/kfd"
       - "/dev/dri:/dev/dri"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: amd
-              count: all
-              capabilities: [gpu]
 
   ai-agent:
     image: ollama-ai-agent:v1.0-gold
@@ -152,7 +144,7 @@ services:
       - ollama-server
     ports:
       - "8501:8501"
-    volumes:          
+    volumes:
       - .:/app
 EOF
 
@@ -346,20 +338,15 @@ EOF
 cat <<'EOF' > aiops/ollama/setup_ia.sh
 #!/bin/bash
 echo "🚀 Iniciando Preparação do Ambiente SRE Córtex no Debian..."
-
 # 1. Atualização de Repositórios
 apt update && apt upgrade -y
-
 # 2. Instalação de Dependências Essenciais
 apt install -y cifs-utils git docker.io docker-compose
-
 # 3. Configuração de Permissões do Docker
 usermod -aG docker $USER
-
 # 4. Criando Estrutura de Pastas
 mkdir -p /home/userlnx/docker/relay
 chmod -R 777 /home/userlnx/docker/relay
-
 # 5. Montagem do Disco Y (Onde estão suas VMs e o projeto)
 mount --bind "/mnt/y/Virtual Machines" /home/userlnx/docker/relay || echo "⚠️ Falha ao montar via bind. Verifique se o disco Y está acessível."
 
@@ -371,7 +358,6 @@ fi
 cd card-system-api
 git fetch origin
 git switch feat/add-iot-ia
-
 # 7. Download/Load das Imagens
 echo "📥 Verificando imagens Docker (Poupando franquia)..."
 if [ -f "/home/userlnx/docker/relay/ollama_latest.tar" ]; then
@@ -380,28 +366,29 @@ else
     docker pull ollama/ollama:0.17.4
 fi
 docker pull python:3.9-slim
-
 # --- [AJUSTE NA ORIGEM: TAG DA IMAGEM GOLD] ---
 # Aqui garantimos que o nome v1.0-gold aponte para a sua imagem pronta de 8GB (ID a24ca7b8f5db)
 echo "🏷️ Vinculando a imagem pesada (8GB) ao Agente Gold..."
 docker tag a24ca7b8f5db ollama-ai-agent:v1.0-gold
-
 echo "✅ AMBIENTE PREPARADO!"
-
-# 8. SUBIDA DOS CONTAINERS
-echo "🚀 Subindo containers..."
-chmod -R 777 /home/userlnx/docker/relay/card-system-api/aiops/ollama/ollama_data 2>/dev/null || true
-
-# Entra na pasta onde o docker-compose.yml REALMENTE está
+# 8. SUBIDA DOS CONTAINERS (Interativo)
 cd /home/userlnx/docker/relay/card-system-api/aiops/ollama
-
-# Sobe os serviços
-docker-compose up -d
-
+echo "------------------------------------------------"
+echo "🖥️  DETECÇÃO DE HARDWARE SRE CÓRTEX"
+echo "1) NVIDIA GTX 760 (Legacy CUDA)"
+echo "2) AMD RX 580 (ROCm Polaris)"
+echo "------------------------------------------------"
+read -p "Selecione o hardware para aceleração: " hardware
+if [ "$hardware" == "1" ]; then
+    echo "🚀 Ativando aceleração NVIDIA..."
+    docker-compose -f docker-compose_gtx760.yml up -d
+else
+    echo "🚀 Ativando aceleração AMD (ROCm)..."
+    docker-compose -f docker-compose_rx580.yml up -d
+fi
 # 9. PÓS-INSTALAÇÃO (Só agora o container existe para o exec!)
 echo "⚙️ Instalando psutil no Agente..."
 docker exec -u root ai-agent pip install psutil
-
 # 10. VERIFICAÇÃO DO MOTOR OLLAMA
 echo "⏳ Aguardando o motor Ollama iniciar (Xeon Mode)..."
 for i in {1..20}; do
@@ -412,7 +399,6 @@ for i in {1..20}; do
     echo "..."
     sleep 2
 done
-
 # 11. MODELO PHI3
 echo "🧠 Verificando modelo Phi-3..."
 if docker exec ollama-server ollama list | grep -q "phi3"; then
@@ -421,7 +407,6 @@ else
     echo "📥 Baixando Phi-3..."
     docker exec -it ollama-server ollama pull phi3:mini
 fi
-
 echo "✅ IA RODANDO!"
 WSL_IP=$(ip addr show eth0 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1); 
 WSL_IP=$(hostname);
@@ -484,6 +469,8 @@ NC='\033[0m'
 echo -e "${GREEN}🚀 Preparando Kernel para RX 580 (MODO ROCm)...${NC}"
 
 # 1. Instala dependências de renderização AMD
+sudo usermod -aG video $USER
+sudo usermod -aG render $USER
 sudo apt-get update && sudo apt-get install -y libnuma-dev libdrm-amdgpu1 mesa-va-drivers clinfo
 
 # 2. Permissões de hardware

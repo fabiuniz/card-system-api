@@ -119,7 +119,7 @@ calcular_espaco_projeto
 #docker load -i pgadmin4.tar
 #docker load -i phpmyadmin.tar
 #docker load -i ollama_ollama_0_17_4.tar
-#docker load -i ollama_ai-agent_latest.tar
+#docker load -i ollama-ai-agent:v1.0-gold.tar
 #docker load -i nvidia_cuda_12_4_1-base-ubuntu22_04.tar
 
 #

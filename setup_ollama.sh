@@ -74,7 +74,7 @@ else:
 EOF
 
 # 4. GERANDO O DOCKERFILE DO AGENTE
-cat <<EOF > requirements.txt
+cat <<EOF > aiops/ollama/requirements.txt
 requests
 streamlit
 pandas
@@ -84,26 +84,27 @@ langchain
 langchain-community
 chromadb
 sentence-transformers
-pysqlite3-binary
 EOF
 cat <<EOF > aiops/ollama/Dockerfile.ai
 FROM python:3.9-slim
 WORKDIR /app
 
-# Aumentando o timeout para 1000 segundos e ignorando cache para evitar arquivos corrompidos
-# Internet: A 1.1 MB/s, esse arquivo de 700MB vai levar cerca de 10 a 12 minutos. O seu timeout=1000 foi a salvação aqui, senão teria caído agora.
-
-# Instala ferramentas de compilação (CRUCIAL para chromadb e prometheus em hardware Xeon)
-
-RUN apt-get update && apt-get install -y \\
-    build-essential \\
-    python3-dev \\
-    gcc \\
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3-dev \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \\
-    pip install --default-timeout=1000 -r requirements.txt
+
+# O truque: Usamos o shell para montar a lista de pastas antes de rodar o pip
+RUN --mount=type=cache,target=/root/.cache/pip \
+    export FIND_LINKS=\$(find /app/pip_cache -type d -printf "--find-links=%p ") && \
+    pip install --default-timeout=1000 \
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple \
+    \$FIND_LINKS \
+    -r requirements.txt
 
 COPY . .
 CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
@@ -129,23 +130,35 @@ services:
       - /home/userlnx/docker/ollama_data:/root/.ollama
     environment:
       - HSA_OVERRIDE_GFX_VERSION=8.0.3
+      - HCC_AMDGPU_TARGET=gfx803
       - OLLAMA_DEBUG=1
     devices:
       - "/dev/kfd:/dev/kfd"
       - "/dev/dri:/dev/dri"
 
   ai-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
     image: ollama-ai-agent:v1.0-gold
     container_name: ai-agent
     pull_policy: never
     environment:
-      - OLLAMA_URL=http://ollama-server:11434/api/generate
+      # Ajustado para o padrão que a maioria das libs python usa
+      - OLLAMA_HOST=ollama-server
+      - OLLAMA_BASE_URL=http://ollama-server:11434
+      # Adicionado para o Dashboard também "ver" a GPU corretamente
+      - HSA_OVERRIDE_GFX_VERSION=8.0.3
     depends_on:
       - ollama-server
     ports:
       - "8501:8501"
     volumes:
       - .:/app
+      - "/mnt/y/Virtual Machines/VirtualPc/vmlinux_d/_plugins/bin_pip:/app/pip_cache"
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri:/dev/dri"
 EOF
 
 # 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
@@ -153,7 +166,7 @@ cat <<EOF > aiops/ollama/docker-compose_gtx760.yml
 version: '3'
 services:
   ollama-server:    
-    image: ollama/ollama:0.1.45
+    image: ollama/ollama:0.17.4
     container_name: ollama-server
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
@@ -302,9 +315,12 @@ echo "--------------------------------------------------------"
 echo "✅ TUDO PRONTO! O Cérebro RAG foi configurado."
 echo "1. Execute 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d' para subir a IA."
 echo "1.1 Ou 'docker compose -f aiops/ollama/docker-compose_rx580.yml up -d' ."
+echo "1.2 Ou 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d' ."
+echo "1.3 Ou 'cd aiops/ollama && ./setup_ia.sh' ."
 echo "2. Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
 echo "2.1 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
 echo "3. Use './add_knowledge.sh' para afinar o agente em tempo real."
+echo '   Exe: ./add_knowledge.sh "\$(cat ../../README.md)"'
 echo "--------------------------------------------------------"
 
 # Passo 1: Preparação do Windows (Lado de Fora) Ele vai ativar o WSL e instalar o Debian
@@ -338,38 +354,8 @@ EOF
 cat <<'EOF' > aiops/ollama/setup_ia.sh
 #!/bin/bash
 echo "🚀 Iniciando Preparação do Ambiente SRE Córtex no Debian..."
-# 1. Atualização de Repositórios
-apt update && apt upgrade -y
-# 2. Instalação de Dependências Essenciais
-apt install -y cifs-utils git docker.io docker-compose
-# 3. Configuração de Permissões do Docker
 usermod -aG docker $USER
-# 4. Criando Estrutura de Pastas
-mkdir -p /home/userlnx/docker/relay
-chmod -R 777 /home/userlnx/docker/relay
-# 5. Montagem do Disco Y (Onde estão suas VMs e o projeto)
-mount --bind "/mnt/y/Virtual Machines" /home/userlnx/docker/relay || echo "⚠️ Falha ao montar via bind. Verifique se o disco Y está acessível."
-
-# 6. Clonagem e Branch
-cd /home/userlnx/docker/relay
-if [ ! -d "card-system-api" ]; then
-    git clone https://github.com/fabiuniz/card-system-api.git
-fi
 cd card-system-api
-git fetch origin
-git switch feat/add-iot-ia
-# 7. Download/Load das Imagens
-echo "📥 Verificando imagens Docker (Poupando franquia)..."
-if [ -f "/home/userlnx/docker/relay/ollama_latest.tar" ]; then
-    docker load -i /home/userlnx/docker/relay/ollama_latest.tar
-else
-    docker pull ollama/ollama:0.17.4
-fi
-docker pull python:3.9-slim
-# --- [AJUSTE NA ORIGEM: TAG DA IMAGEM GOLD] ---
-# Aqui garantimos que o nome v1.0-gold aponte para a sua imagem pronta de 8GB (ID a24ca7b8f5db)
-echo "🏷️ Vinculando a imagem pesada (8GB) ao Agente Gold..."
-docker tag a24ca7b8f5db ollama-ai-agent:v1.0-gold
 echo "✅ AMBIENTE PREPARADO!"
 # 8. SUBIDA DOS CONTAINERS (Interativo)
 cd /home/userlnx/docker/relay/card-system-api/aiops/ollama
@@ -381,15 +367,15 @@ echo "------------------------------------------------"
 read -p "Selecione o hardware para aceleração: " hardware
 if [ "$hardware" == "1" ]; then
     echo "🚀 Ativando aceleração NVIDIA..."
-    docker-compose -f docker-compose_gtx760.yml up -d
+    docker compose -f docker-compose_gtx760.yml up -d
 else
     echo "🚀 Ativando aceleração AMD (ROCm)..."
-    docker-compose -f docker-compose_rx580.yml up -d
+    # Adicionando a remoção de containers órfãos para evitar o erro de porta ocupada
+    docker compose -f docker-compose_rx580.yml down --remove-orphans
+    docker compose -f docker-compose_rx580.yml up -d
+    docker logs ollama-server --tail 20 | grep -E "gpu|vram|compute"
 fi
-# 9. PÓS-INSTALAÇÃO (Só agora o container existe para o exec!)
-echo "⚙️ Instalando psutil no Agente..."
-docker exec -u root ai-agent pip install psutil
-# 10. VERIFICAÇÃO DO MOTOR OLLAMA
+# 9. VERIFICAÇÃO DO MOTOR OLLAMA
 echo "⏳ Aguardando o motor Ollama iniciar (Xeon Mode)..."
 for i in {1..20}; do
     if docker exec ollama-server ollama list >/dev/null 2>&1; then
@@ -399,14 +385,15 @@ for i in {1..20}; do
     echo "..."
     sleep 2
 done
-# 11. MODELO PHI3
+# 10. MODELO PHI3 (Verificação inteligente)
 echo "🧠 Verificando modelo Phi-3..."
 if docker exec ollama-server ollama list | grep -q "phi3"; then
-    echo "✅ Modelo Phi-3 já encontrado localmente."
+    echo "✅ Modelo Phi-3 detectado. Pulando download para poupar dados."
 else
-    echo "📥 Baixando Phi-3..."
+    echo "📥 Baixando Phi-3 (Apenas se necessário)..."
     docker exec -it ollama-server ollama pull phi3:mini
 fi
+lsmod | grep amdgpu || echo "⚠️ Alerta: Driver amdgpu não detectado no kernel!"
 echo "✅ IA RODANDO!"
 WSL_IP=$(ip addr show eth0 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1); 
 WSL_IP=$(hostname);
@@ -456,7 +443,6 @@ docker compose down --remove-orphans
 docker compose up -d
 echo -e "${GREEN}✅ Script concluído! Aguardando inicialização do NVML...${NC}"
 sleep 8
-docker logs ollama-server --tail 20 | grep -E "gpu|vram|compute"
 EOF
 chmod +x aiops/ollama/setup_nvidia.sh
 
@@ -692,4 +678,13 @@ chmod +x aiops/ollama/check_infra.sh
 #|=============================================================================|
 #|  No running processes found                                                 |
 #+-----------------------------------------------------------------------------+
-root@pc-linux:/home/userlnx/docker/script_docker/card-system-api/aiops/ollama#
+#root@pc-linux:/home/userlnx/docker/script_docker/card-system-api/aiops/ollama#
+
+## Remove a placa do barramento
+#echo 1 | sudo tee /sys/bus/pci/devices/0000:03:00.0/remove
+#sleep 2
+# Força o kernel a re-escannear o barramento
+#echo 1 | sudo tee /sys/bus/pci/rescan
+
+
+#Analise o log de erro X e sugira a causa raiz baseada no conhecimento do Santander

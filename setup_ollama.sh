@@ -6,73 +6,133 @@ echo "🤖 [SRE Córtex] Iniciando instalação da IA Preditiva Santander..."
 
 
 # 2. GERANDO O AGENTE PREDITIVO (Python + LangChain + RAG)
+cat <<EOF > aiops/ollama/dashboard.py
+import streamlit as st
+import requests
+import pandas as pd
+import platform
+import psutil
+import os
+import subprocess
+os.environ['TRANSFORMERS_OFFLINE'] = "1"
+os.environ['HF_DATASETS_OFFLINE'] = "1"
+st.set_page_config(page_title="SRE Córtex - Santander", layout="wide")
+st.title("🤖 SRE Córtex - Painel Preditivo")
+def get_gpu_info():
+    try:
+        # Tenta NVIDIA
+        gpu_raw = subprocess.check_output("nvidia-smi --query-gpu=name --format=csv,noheader", shell=True).decode()
+        return gpu_raw.strip(), "Aceleração CUDA (GTX 760)"
+    except:
+        try:
+            # Tenta AMD (Verifica se o dispositivo de render existe)
+            if os.path.exists("/dev/dri/renderD128"):
+                return "AMD Radeon RX 580 8GB", "Aceleração ROCm (Polaris)"
+        except:
+            pass
+    return "Executando em CPU", "Modo Xeon (AVX2)"
+gpu_label, motor = get_gpu_info()
+# Sidebar com Status do Hardware REAL da Máquina
+st.sidebar.header("📡 Status da Infra Local")
+# Detecta Processador e Threads
+# No dashboard.py, procure a parte do cpu_info e substitua por:
+def get_detailed_cpu():
+    try:
+        # Tenta ler diretamente do sistema de arquivos do Linux (mais preciso no WSL)
+        with open("/proc/cpuinfo", "r") as f:
+            for line in f:
+                if "model name" in line:
+                    return line.split(":")[1].strip()
+    except:
+        return platform.processor()
+cpu_model = get_detailed_cpu()
+# Exibe no Sidebar sem cortes bruscos
+st.sidebar.subheader("💻 Processador")
+st.sidebar.info(f"{cpu_model}")
+st.sidebar.write(f"**Threads:** {os.cpu_count()} | **Arquitetura:** {platform.machine()}")
+# Detecta RAM Total e Livre
+mem = psutil.virtual_memory()
+ram_total = f"{mem.total / (1024**3):.2f} GB"
+ram_livre = f"{mem.available / (1024**2):.0f} MB"
+st.sidebar.metric("Memória RAM", ram_total, f"Livre: {ram_livre}")
+# Exibe o status da GPU corrigido
+st.sidebar.metric("GPU Status", gpu_label, motor)
+# --- Área de Métricas em Tempo Real ---
+col1, col2, col3 = st.columns(3)
+col1.metric("Latência Média", "250ms", "+10ms")
+col2.metric("Taxa de Erro", "2%", "-0.5%")
+col3.metric("Status do Modelo", "Ollama Engine", "Online")
+# Interface de Chat com a IA
+st.subheader("🧠 Consulta ao Agente RAG")
+modelo_selecionado = st.selectbox(
+    "Escolha o Modelo de Análise:",
+    ["tinyllama", "phi3:mini", "llama3:8b-instruct-q4_0"],
+    index=0,
+    help="Phi3: Rápido (GPU/CPU). Llama3: Completo (Exige o Xeon). TinyLlama: Para análises leves."
+)
+user_input = st.text_input("Descreva o incidente ou peça uma análise:")
+if user_input:
+    with st.spinner(f'IA Córtex analisando via {modelo_selecionado}...'):
+        payload = {
+            "model": modelo_selecionado,
+            "prompt": user_input,
+            "stream": False
+        }
+        try:
+            # Timeout de 300s para evitar travamentos no hardware antigo
+            response = requests.post(
+                "http://ollama-server:11434/api/generate",
+                json=payload,
+                timeout=300
+            )
+            response.raise_for_status()
+            st.write("### 📢 Insight do Engenheiro SRE:")
+            st.info(response.json()['response'])
+        except Exception as e:
+            st.error(f"❌ Erro na consulta: {e}")
+# Tabela de logs do 'Cérebro'
+st.subheader("📂 Conhecimento Indexado (RAG Memory)")
+st.table(pd.DataFrame({
+    "Fonte de Dados": ["Manuais_Santander.md", "Histórico_Incidentes.db", "Check_Infra.log"],
+    "Status": ["Sincronizado", "Ativo", "Atualizado"]
+}))
+EOF
+
+# Indexa os manuais iniciais do Santander no banco de dados vetorial.
 cat <<'EOF' > aiops/ollama/predictive_agent_rag.py
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import requests
-import time
 import os
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-
-# Configurações
 OLLAMA_URL = "http://ollama-server:11434/api/generate"
-PROMETHEUS_URL = "http://prometheus:9090/api/v1/query"
-
-# Garante que o modelo de tradução de texto (Embeddings) seja o local
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
 def get_context(query):
-    if os.path.exists("./vector_db"):
-        vector_db = Chroma(persist_directory="./vector_db", embedding_function=embeddings)
-        results = vector_db.similarity_search(query, k=3) # Aumentado para k=3 para dar mais base à IA
+    # Forçamos o caminho absoluto dentro do container
+    db_path = "./vector_db"
+    if os.path.exists(db_path):
+        vector_db = Chroma(persist_directory=db_path, embedding_function=embeddings)
+        results = vector_db.similarity_search(query, k=3)
         return "\n".join([res.page_content for res in results])
-    return "Nenhum conhecimento prévio encontrado."
-
+    return "AVISO: O MANUAL TÉCNICO NÃO FOI ENCONTRADO!"
 def ask_ollama(metrics, context, model="phi3:mini"):
-    # SYSTEM PROMPT: O segredo para parar a alucinação de "Cartório"
-    system_instruction = (
-        "Você é o CÓRTEX, um Agente SRE Especialista em AIOps do Santander/F1RST. "
-        "Seu foco é o 'Card System Platform' (Processamento de Cartões de Crédito). "
-        "PROIBIDO mencionar cartórios, registros civis ou biologia. "
-        "A stack real é: Java 11, Spring Boot, PostgreSQL, MongoDB e MySQL. "
-        "Seja técnico, conciso e baseie-se estritamente no contexto fornecido."
+    system_prompt = (
+        "Você é o CÓRTEX, Agente SRE do Santander. "
+        "USE APENAS O CONTEXTO ABAIXO. Se a informação não estiver no contexto, diga que não sabe. "
+        "RESPOSTA CURTA E TÉCNICA."
     )
-
-    prompt = f"""
-    {system_instruction}
-
-    ### CONTEXTO DO MANUAL (README/SOP):
-    {context}
-
-    ### MÉTRICAS DE TELEMETRIA (PROMETHEUS):
-    {metrics}
-
-    ### PERGUNTA/INCIDENTE:
-    Analise as métricas acima com base no manual e sugira a correção.
-    """
-    
-    # Adicionamos 'options' para travar a criatividade (Temperature baixa = Resposta exata)
+    full_prompt = f"{system_prompt}\n\nCONTEXTO DO MANUAL:\n{context}\n\nMETRICAS:\n{metrics}\n\nPERGUNTA: Analise as camadas do projeto e a imagem base Docker."
     payload = {
-        "model": model, 
-        "prompt": prompt, 
+        "model": model,
+        "prompt": full_prompt,
         "stream": False,
-        "options": {
-            "temperature": 0.1,
-            "top_p": 0.1,
-            "num_ctx": 4096
-        }
+        "options": {"temperature": 0.0, "num_ctx": 4096}
     }
-
-    try:
-        res = requests.post(OLLAMA_URL, json=payload, timeout=300)
-        res.raise_for_status()
-        return res.json()['response']
-    except requests.exceptions.RequestException as e:
-        return f"⚠️ Erro de conexão com Ollama: {e}"
-
-print("🚀 Agente Preditivo Córtex (Santander Edition) Rodando...")
+    res = requests.post(OLLAMA_URL, json=payload, timeout=300)
+    return res.json()['response']
+print("🚀 Córtex SRE: RAG Reforçado e Online.")
 EOF
 
 # 3. GERANDO O SCRIPT DE RE-INDEXAÇÃO (Afinamento)
@@ -83,12 +143,10 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
-
 print("🔄 Sincronizando novos conhecimentos...")
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 loader = DirectoryLoader('./brain', glob="**/*.md", loader_cls=TextLoader)
 documents = loader.load()
-
 if documents:
     vector_db = Chroma.from_documents(documents=documents, embedding=embeddings, persist_directory="./vector_db")
     print(f"✅ {len(documents)} arquivos de conhecimento indexados.")
@@ -112,15 +170,12 @@ EOF
 cat <<EOF > aiops/ollama/Dockerfile.ai
 FROM python:3.9-slim
 WORKDIR /app
-
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*
-
 COPY requirements.txt .
-
 # O truque: Usamos o shell para montar a lista de pastas antes de rodar o pip
 RUN --mount=type=cache,target=/root/.cache/pip \
     export FIND_LINKS=\$(find /app/pip_cache -type d -printf "--find-links=%p ") && \
@@ -129,7 +184,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --extra-index-url https://pypi.org/simple \
     \$FIND_LINKS \
     -r requirements.txt
-
 COPY . .
 CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
 EOF
@@ -228,98 +282,6 @@ services:
       - .:/app
 EOF
 
-# Indexa os manuais iniciais do Santander no banco de dados vetorial.
-cat <<EOF > aiops/ollama/dashboard.py
-import streamlit as st
-import requests
-import pandas as pd
-import platform
-import psutil
-import os
-import subprocess
-os.environ['TRANSFORMERS_OFFLINE'] = "1"
-os.environ['HF_DATASETS_OFFLINE'] = "1"
-st.set_page_config(page_title="SRE Córtex - Santander", layout="wide")
-st.title("🤖 SRE Córtex - Painel Preditivo")
-def get_gpu_info():
-    try:
-        # Tenta NVIDIA
-        gpu_raw = subprocess.check_output("nvidia-smi --query-gpu=name --format=csv,noheader", shell=True).decode()
-        return gpu_raw.strip(), "Aceleração CUDA (GTX 760)"
-    except:
-        try:
-            # Tenta AMD (Verifica se o dispositivo de render existe)
-            if os.path.exists("/dev/dri/renderD128"):
-                return "AMD Radeon RX 580 8GB", "Aceleração ROCm (Polaris)"
-        except:
-            pass
-    return "Executando em CPU", "Modo Xeon (AVX2)"
-gpu_label, motor = get_gpu_info()
-# Sidebar com Status do Hardware REAL da Máquina
-st.sidebar.header("📡 Status da Infra Local")
-# Detecta Processador e Threads
-# No dashboard.py, procure a parte do cpu_info e substitua por:
-def get_detailed_cpu():
-    try:
-        # Tenta ler diretamente do sistema de arquivos do Linux (mais preciso no WSL)
-        with open("/proc/cpuinfo", "r") as f:
-            for line in f:
-                if "model name" in line:
-                    return line.split(":")[1].strip()
-    except:
-        return platform.processor()
-cpu_model = get_detailed_cpu()
-# Exibe no Sidebar sem cortes bruscos
-st.sidebar.subheader("💻 Processador")
-st.sidebar.info(f"{cpu_model}")
-st.sidebar.write(f"**Threads:** {os.cpu_count()} | **Arquitetura:** {platform.machine()}")
-# Detecta RAM Total e Livre
-mem = psutil.virtual_memory()
-ram_total = f"{mem.total / (1024**3):.2f} GB"
-ram_livre = f"{mem.available / (1024**2):.0f} MB"
-st.sidebar.metric("Memória RAM", ram_total, f"Livre: {ram_livre}")
-# Exibe o status da GPU corrigido
-st.sidebar.metric("GPU Status", gpu_label, motor)
-# --- Área de Métricas em Tempo Real ---
-col1, col2, col3 = st.columns(3)
-col1.metric("Latência Média", "250ms", "+10ms")
-col2.metric("Taxa de Erro", "2%", "-0.5%")
-col3.metric("Status do Modelo", "Ollama Engine", "Online")
-# Interface de Chat com a IA
-st.subheader("🧠 Consulta ao Agente RAG")
-modelo_selecionado = st.selectbox(
-    "Escolha o Modelo de Análise:",
-    ["tinyllama", "phi3:mini", "llama3:8b-instruct-q4_0"],
-    index=0,
-    help="Phi3: Rápido (GPU/CPU). Llama3: Completo (Exige o Xeon). TinyLlama: Para análises leves."
-)
-user_input = st.text_input("Descreva o incidente ou peça uma análise:")
-if user_input:
-    with st.spinner(f'IA Córtex analisando via {modelo_selecionado}...'):
-        payload = {
-            "model": modelo_selecionado,
-            "prompt": user_input,
-            "stream": False
-        }
-        try:
-            # Timeout de 300s para evitar travamentos no hardware antigo
-            response = requests.post(
-                "http://ollama-server:11434/api/generate",
-                json=payload,
-                timeout=300
-            )
-            response.raise_for_status()
-            st.write("### 📢 Insight do Engenheiro SRE:")
-            st.info(response.json()['response'])
-        except Exception as e:
-            st.error(f"❌ Erro na consulta: {e}")
-# Tabela de logs do 'Cérebro'
-st.subheader("📂 Conhecimento Indexado (RAG Memory)")
-st.table(pd.DataFrame({
-    "Fonte de Dados": ["Manuais_Santander.md", "Histórico_Incidentes.db", "Check_Infra.log"],
-    "Status": ["Sincronizado", "Ativo", "Atualizado"]
-}))
-EOF
 echo "--------------------------------------------------------"
 echo "✅ TUDO PRONTO! O Cérebro RAG foi configurado."
 echo "1. Execute 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d' para subir a IA."
@@ -473,28 +435,23 @@ cat <<'EOF' > aiops/ollama/setup_amd.sh
 GREEN='\033[0;32m'
 NC='\033[0m'
 echo -e "${GREEN}🚀 Preparando Kernel para RX 580 (MODO ROCm)...${NC}"
-
 # 1. Instala dependências de renderização AMD
 sudo usermod -aG video $USER
 sudo usermod -aG render $USER
 sudo apt-get update && sudo apt-get install -y libnuma-dev libdrm-amdgpu1 mesa-va-drivers clinfo
-
 # 2. Permissões de hardware
 sudo usermod -aG video $USER
 sudo usermod -aG render $USER
-
 # 3. Patch para arquitetura Polaris (RX 580)
 if ! grep -q "HSA_OVERRIDE_GFX_VERSION" /etc/environment; then
     echo "HSA_OVERRIDE_GFX_VERSION=8.0.3" | sudo tee -a /etc/environment
 fi
-
 # 4. Sobe o container específico
 cd "$(dirname "$0")"
 docker-compose -f docker-compose_rx580.yml up -d
 echo -e "${GREEN}✅ RX 580 Ativada! Verifique com: docker logs ollama-server${NC}"
 EOF
 chmod +x aiops/ollama/setup_amd.sh
-
 # Rodar logo após o setup da NVIDIA. Ele garante que, se a GTX 760 falhar por ser antiga, o Docker use o modo "runc" estável para o Xeon não travar.
 cat <<'EOF' > aiops/ollama/setup_AVX.sh
 # --- AJUSTE DE SEGURANÇA: RESET DO RUNTIME ---

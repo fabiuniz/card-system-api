@@ -167,23 +167,27 @@ chromadb
 sentence-transformers
 pysqlite3-binary
 EOF
+
 cat <<EOF > aiops/ollama/Dockerfile.ai
 FROM python:3.9-slim
 WORKDIR /app
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python3-dev \
-    gcc \
+# 1. Instala dependências e o 'findutils' completo
+RUN apt-get update && apt-get install -y \\
+    build-essential \\
+    python3-dev \\
+    gcc \\
+    findutils \\
     && rm -rf /var/lib/apt/lists/*
+# 2. Copia requisitos
 COPY requirements.txt .
-# O truque: Usamos o shell para montar a lista de pastas antes de rodar o pip
-RUN --mount=type=cache,target=/root/.cache/pip \
-    export FIND_LINKS=\$(find /app/pip_cache -type d -printf "--find-links=%p ") && \
-    pip install --default-timeout=1000 \
-    --index-url https://download.pytorch.org/whl/cpu \
-    --extra-index-url https://pypi.org/simple \
-    \$FIND_LINKS \
-    -r requirements.txt
+# 3. O PULO DO GATO (Versão Blindada):
+# Usamos \\\$ para o shell do host não tentar resolver a variável antes da hora.
+# Adicionamos 'file://' para o PIP não ignorar os diretórios.
+RUN --mount=type=bind,source=pip_cache,target=/app/pip_cache \
+    export FIND_LINKS=$(find /app/pip_cache -name "*.whl" -printf "%h\n" | sort -u | tr '\n' ' ') && \
+    pip install --no-index --find-links="$FIND_LINKS" -r requirements.txt || \\
+    (echo "⚠️ Falha no modo offline, tentando fallback..." && pip install \$FIND_LINKS -r requirements.txt)
+# 4. Copia o restante
 COPY . .
 CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
 EOF

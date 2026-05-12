@@ -242,21 +242,21 @@ services:
       - "/dev/dri:/dev/dri"
 EOF
 
-# 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
+# 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE) #latest # 0.1.32 #0.17.4 #0.1.32
 cat <<EOF > aiops/ollama/docker-compose_gtx760.yml
 version: '3'
 services:
   ollama-server:    
-    image: ollama/ollama:0.17.4
+    image: ollama/ollama:0.1.32
     container_name: ollama-server
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_VISIBLE_DEVICES=all      
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - OLLAMA_LLM_LIBRARY=cuda_v11
       - OLLAMA_DEBUG=1
       - OLLAMA_NUM_GPU=1
       - NVIDIA_DISABLE_REQUIRE=true 
       - CUDA_CACHE_DISABLE=1
-      - OLLAMA_LLM_LIBRARY=cuda_v11
     restart: always
     ports:
       - "11434:11434"
@@ -284,19 +284,62 @@ services:
       - "8501:8501"
     volumes:          
       - .:/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+EOF
+
+# 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
+cat <<EOF > aiops/ollama/docker-compose_cpu.yml
+version: '3'
+services:
+  ollama-server:
+    image: ollama/ollama:latest
+    container_name: ollama-server
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - /home/userlnx/docker/ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+
+  ai-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    image: ollama-ai-agent:v1.0-gold
+    container_name: ai-agent
+    environment:
+      - OLLAMA_HOST=ollama-server
+      - OLLAMA_BASE_URL=http://ollama-server:11434
+    depends_on:
+      - ollama-server
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
 EOF
 
 echo "--------------------------------------------------------"
 echo "✅ TUDO PRONTO! O Cérebro RAG foi configurado."
-echo "1. Execute 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d' para subir a IA."
-echo "1.1 Ou 'docker compose -f aiops/ollama/docker-compose_rx580.yml up -d' ."
-echo "1.2 Ou 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d' ."
-echo "1.3 Ou 'cd aiops/ollama && ./setup_ia.sh' ."
-echo "2. Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
-echo "2.1 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
-echo "3. Use './add_knowledge.sh' para afinar o agente em tempo real."
-echo '   Exe: ./add_knowledge.sh "\$(cat ../../README.md)"'
-echo '   Para apagar base ./clear_knowledge.sh'
+echo "1. Subir container"
+echo " - 1 Só CPU 'docker compose -f aiops/ollama/docker-compose_cpu.yml up -d'"
+echo " - 2 RX580 'docker compose -f aiops/ollama/docker-compose_rx580.yml up -d' ."
+echo " - 3 GTX760 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d --force-recreate' ."
+echo " - 4 Assistente 'cd aiops/ollama && ./setup_ia.sh' ."
+echo "2. Baixar modelos"
+echo " - 1 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
+echo " - 2 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
+echo " - 3 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3:8b-instruct-q4_0'"
+echo "4. Popular conteudo"
+echo " - 1 Use './add_knowledge.sh' para afinar o agente em tempo real."
+echo ' - 2 Exe: ./add_knowledge.sh "\$(cat ../../README.md)"'
+echo ' - 3   Para apagar base ./clear_knowledge.sh'
 echo "--------------------------------------------------------"
 
 # Passo 1: Preparação do Windows (Lado de Fora) Ele vai ativar o WSL e instalar o Debian
@@ -337,7 +380,6 @@ export DOCKER_BUILDKIT=1
 # Agora roda o build sem o --mount falhar
 DOCKER_BUILDKIT=1 docker build -t ollama-ai-agent:v1.0-gold -f Dockerfile.ai .
 usermod -aG docker $USER
-
 echo "✅ AMBIENTE PREPARADO!"
 cd "$(dirname "$(readlink -f "$0")")"
 # 2. Detecção de Hardwar
@@ -345,21 +387,24 @@ echo "------------------------------------------------"
 echo "🖥️  DETECÇÃO DE HARDWARE SRE CÓRTEX"
 echo "1) NVIDIA GTX 760 (Legacy CUDA)"
 echo "2) AMD RX 580 (ROCm Polaris)"
+echo "3) APENAS CPU (Modo Xeon Estável - Sem GPU)"
 echo "------------------------------------------------"
 read -p "Selecione o hardware para aceleração: " hardware
 docker compose -f docker-compose_gtx760.yml up -d
-
 # 3. Subida inteligente (apenas uma vez)
 # SUBIDA DOS CONTAINERS (Interativo)
 if [ "$hardware" == "1" ]; then
     echo "🚀 Ativando aceleração NVIDIA..."
     docker compose -f docker-compose_gtx760.yml up -d
-else
+elif [ "$hardware" == "2" ]; then
     echo "🚀 Ativando aceleração AMD (ROCm)..."
     # Adicionando a remoção de containers órfãos para evitar o erro de porta ocupada
     docker compose -f docker-compose_rx580.yml down --remove-orphans
     docker compose -f docker-compose_rx580.yml up -d
     docker logs ollama-server --tail 20 | grep -E "gpu|vram|compute"
+else
+    echo "🚀 Iniciando em MODO CPU (Sem aceleração gráfica)..."
+    docker compose -f docker-compose_cpu.yml up -d
 fi
 # 9. VERIFICAÇÃO DO MOTOR OLLAMA
 echo "⏳ Aguardando o motor Ollama iniciar (Xeon Mode)..."
@@ -389,46 +434,46 @@ echo "--------------------------------------------------------"
 EOF
 chmod +x aiops/ollama/setup_ia.sh
 
-# Ele vai instalar o Toolkit da NVIDIA para o Docker
+# Prepara o sistema e o Docker para suportar a NVIDIA Legacy
 cat <<'EOF' > aiops/ollama/setup_nvidia.sh
 #!/bin/bash
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
-echo -e "${GREEN}🚀 Iniciando Configuração de GPU Legacy (Kepler) para Docker...${NC}"
-# 1. Validação de Sanidade do Driver
+echo -e "${GREEN}🛠️ Preparando suporte GPU (Driver 550) para o sistema...${NC}"
+# 1. Validação do Driver
 if ! nvidia-smi &> /dev/null; then
-    echo -e "${RED}❌ Erro: O driver NVIDIA (Tesla 470) não está carregado corretamente.${NC}"
-    echo "Tente rodar: sudo modprobe nvidia-tesla-470"
+    echo -e "${RED}❌ Driver NVIDIA não detectado. Certifique-se de ter reiniciado após a instalação.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✅ Driver 470 Ativo!${NC}"
-# 2. Re-instalação/Atualização do Toolkit (Garante que a biblioteca case com o driver)
-echo "📦 Validando NVIDIA Container Toolkit..."
+# 2. Toolkit do Docker (Adicionada verificação de repositório se necessário)
+echo "📦 Instalando/Verificando NVIDIA Container Toolkit..."
+# Nota: Como você já tem o repositório da NVIDIA nas suas listas de 'apt', o comando abaixo deve fluir bem.
 sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-# 3. Configuração do Docker Runtime
-# Forçamos o runtime nvidia como padrão para evitar que o Ollama tente usar o 'runc' puro
-echo "⚙️ Configurando Docker Runtime..."
+# 3. Configuração de Runtime
+echo "⚙️ Configurando NVIDIA como Runtime padrão do Docker..."
 sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
-sudo nvidia-ctk runtime configure --runtime=docker
-# 4. Ajuste de Compatibilidade Kepler (Cgroups v1/v2 fix)
+# 4. Ajuste de Compatibilidade para Kernels Novos e Placas Antigas
+# No Debian 13/Kernel 6.12, o cgroups v2 é padrão. 
+# O ajuste abaixo garante que o toolkit não tente isolar recursos de forma que a placa falhe.
 if [ -f /etc/nvidia-container-runtime/config.toml ]; then
-    echo "🔧 Aplicando patch no config.toml (no-cgroups = true)..."
+    echo "🔧 Ajustando config.toml para o Kernel 6.12 e Cgroups v2..."
     sudo sed -i 's/no-cgroups = false/no-cgroups = true/g' /etc/nvidia-container-runtime/config.toml
+    # Adicional: desativa o modo debug para performance
+    sudo sed -i 's/debug = .*/debug = false/g' /etc/nvidia-container-runtime/config.toml
 fi
-# 5. Reinício dos serviços
-echo "🔄 Reiniciando serviços..."
-sudo systemctl daemon-reload
+# 5. Correção de permissões (DICA EXTRA!)
+# Às vezes, o Docker precisa de permissão explícita para acessar os nós da NVIDIA em /dev
+echo "🛡️ Ajustando permissões de dispositivos de vídeo..."
+sudo chmod 666 /dev/nvidia* || true
+# 6. Atualizando cache de bibliotecas
+echo "🔗 Atualizando cache de bibliotecas (ldconfig)..."
+sudo ldconfig
+# 7. Reinício do Serviço
+echo "🔄 Reiniciando o Docker para aplicar as configurações..."
 sudo systemctl restart docker
-# 6. Deploy do Ollama (Usando o caminho corrigido)
-echo -e "${GREEN}🐳 Subindo containers do Ollama...${NC}"
-# Correção do readlink para Debian
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
-cd "$SCRIPT_DIR"
-docker compose down --remove-orphans
-docker compose up -d
-echo -e "${GREEN}✅ Script concluído! Aguardando inicialização do NVML...${NC}"
-sleep 8
+echo -e "${GREEN}✅ Hardware preparado! O Docker agora suporta sua GPU com Driver 550.${NC}"
+echo -e "Dica: Teste com 'docker run --rm --gpus all nvidia/cuda:12.0-base-ubuntu22.04 nvidia-smi'"
 EOF
 chmod +x aiops/ollama/setup_nvidia.sh
 
@@ -440,15 +485,15 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 echo -e "${GREEN}🚀 Preparando Kernel para RX 580 (MODO ROCm)...${NC}"
 # 1. Instala dependências de renderização AMD
-sudo usermod -aG video $USER
-sudo usermod -aG render $USER
-sudo apt-get update && sudo apt-get install -y libnuma-dev libdrm-amdgpu1 mesa-va-drivers clinfo
+usermod -aG video $USER
+usermod -aG render $USER
+apt-get update && apt-get install -y libnuma-dev libdrm-amdgpu1 mesa-va-drivers clinfo
 # 2. Permissões de hardware
-sudo usermod -aG video $USER
-sudo usermod -aG render $USER
+usermod -aG video $USER
+usermod -aG render $USER
 # 3. Patch para arquitetura Polaris (RX 580)
 if ! grep -q "HSA_OVERRIDE_GFX_VERSION" /etc/environment; then
-    echo "HSA_OVERRIDE_GFX_VERSION=8.0.3" | sudo tee -a /etc/environment
+    echo "HSA_OVERRIDE_GFX_VERSION=8.0.3" | tee -a /etc/environment
 fi
 # 4. Sobe o container específico
 cd "$(dirname "$0")"
@@ -685,10 +730,10 @@ chmod +x aiops/ollama/check_infra.sh
 #root@pc-linux:/home/userlnx/docker/script_docker/card-system-api/aiops/ollama#
 
 ## Remove a placa do barramento
-#echo 1 | sudo tee /sys/bus/pci/devices/0000:03:00.0/remove
+#echo 1 | tee /sys/bus/pci/devices/0000:03:00.0/remove
 #sleep 2
 # Força o kernel a re-escannear o barramento
-#echo 1 | sudo tee /sys/bus/pci/rescan
+#echo 1 | tee /sys/bus/pci/rescan
 
 
 #Córtex, quais são as 3 camadas da Arquitetura Hexagonal deste projeto e qual imagem Docker base é usada para o Java?

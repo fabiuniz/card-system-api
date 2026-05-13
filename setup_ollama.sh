@@ -72,30 +72,32 @@ modelo_selecionado = st.selectbox(
 )
 user_input = st.text_input("Descreva o incidente ou peça uma análise:")
 if user_input:
-    with st.spinner(f'IA Córtex analisando via {modelo_selecionado}...'):
-        payload = {
-            "model": modelo_selecionado,
-            "prompt": user_input,
-            "stream": False
-        }
-        try:
-            # Timeout de 300s para evitar travamentos no hardware antigo
-            response = requests.post(
-                "http://ollama-server:11434/api/generate",
-                json=payload,
-                timeout=300
-            )
-            response.raise_for_status()
-            st.write("### 📢 Insight do Engenheiro SRE:")
-            st.info(response.json()['response'])
-        except Exception as e:
-            st.error(f"❌ Erro na consulta: {e}")
+    with st.spinner('Consultando base de conhecimento técnica...'):
+        # 1. Busca no banco vetorial (ChromaDB)
+        import predictive_agent_rag as rag
+        contexto_recuperado = rag.get_context(user_input)
+        
+        # 2. Envia para o Ollama com as métricas da tela
+        metricas_atuais = f"Latência: 250ms, Erro: 2%"
+        resposta = rag.ask_ollama(metricas_atuais, contexto_recuperado, modelo_selecionado)
+        
+        st.write("### 📢 Insight do Engenheiro SRE:")
+        st.info(resposta)
 # Tabela de logs do 'Cérebro'
 st.subheader("📂 Conhecimento Indexado (RAG Memory)")
-st.table(pd.DataFrame({
-    "Fonte de Dados": ["Manuais_Santander.md", "Histórico_Incidentes.db", "Check_Infra.log"],
-    "Status": ["Sincronizado", "Ativo", "Atualizado"]
-}))
+if os.path.exists("./brain"):
+    arquivos = os.listdir("./brain")
+    datas = [
+        pd.to_datetime(os.path.getmtime(os.path.join("./brain", f)), unit='s').strftime('%d/%m/%Y %H:%M') 
+        for f in arquivos
+    ]
+    st.table(pd.DataFrame({
+        "Fonte de Dados": arquivos,
+        "Data de Indexação": datas,
+        "Status": ["✅ Ativo" for _ in arquivos]
+    }))
+else:
+    st.write("Nenhum conhecimento extra indexado ainda.")
 EOF
 
 # Indexa os manuais iniciais do Santander no banco de dados vetorial.
@@ -107,32 +109,43 @@ import requests
 import os
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
+
 OLLAMA_URL = "http://ollama-server:11434/api/generate"
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+# Tentativa com caminho garantido pelo volume do Docker
+MODEL_PATH = "/app/aiops/ollama/models/all-MiniLM-L6-v2"
+
+embeddings = HuggingFaceEmbeddings(
+    model_name=MODEL_PATH,
+    model_kwargs={'device': 'cpu'}
+)
+
 def get_context(query):
-    # Forçamos o caminho absoluto dentro do container
-    db_path = "./vector_db"
+    db_path = "/app/vector_db"
     if os.path.exists(db_path):
         vector_db = Chroma(persist_directory=db_path, embedding_function=embeddings)
         results = vector_db.similarity_search(query, k=3)
         return "\n".join([res.page_content for res in results])
     return "AVISO: O MANUAL TÉCNICO NÃO FOI ENCONTRADO!"
-def ask_ollama(metrics, context, model="phi3:mini"):
-    system_prompt = (
-        "Você é o CÓRTEX, Agente SRE do Santander. "
-        "USE APENAS O CONTEXTO ABAIXO. Se a informação não estiver no contexto, diga que não sabe. "
-        "RESPOSTA CURTA E TÉCNICA."
+
+def ask_ollama(metrics, context, question, model="llama3:8b-instruct-q4_0"):
+    system_instruction = (
+        "Você é o SRE CÓRTEX. Ignore biologia. Foque em TI/Santander."
     )
-    full_prompt = f"{system_prompt}\n\nCONTEXTO DO MANUAL:\n{context}\n\nMETRICAS:\n{metrics}\n\nPERGUNTA: Analise as camadas do projeto e a imagem base Docker."
+    full_prompt = f"{system_instruction}\nCONTEXTO: {context}\nMETRICAS: {metrics}\nPERGUNTA: {question}"
+    
     payload = {
         "model": model,
         "prompt": full_prompt,
         "stream": False,
-        "options": {"temperature": 0.0, "num_ctx": 4096}
+        "options": {"num_gpu": 5}
     }
-    res = requests.post(OLLAMA_URL, json=payload, timeout=300)
-    return res.json()['response']
-print("🚀 Córtex SRE: RAG Reforçado e Online.")
+    
+    try:
+        res = requests.post(OLLAMA_URL, json=payload, timeout=300)
+        return res.json()['response']
+    except Exception as e:
+        return f"Erro: {str(e)}"
 EOF
 
 # 3. GERANDO O SCRIPT DE RE-INDEXAÇÃO (Afinamento)
@@ -144,7 +157,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 print("🔄 Sincronizando novos conhecimentos...")
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+embeddings = HuggingFaceEmbeddings(model_name="./models/all-MiniLM-L6-v2")
 loader = DirectoryLoader('./brain', glob="**/*.md", loader_cls=TextLoader)
 documents = loader.load()
 if documents:
@@ -246,24 +259,17 @@ EOF
 cat <<EOF > aiops/ollama/docker-compose_gtx760.yml
 version: '3'
 services:
-  ollama-server:    
-    image: ollama/ollama:0.1.32
+  ollama-server:
+    image: ollama/ollama:0.17.4
     container_name: ollama-server
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all      
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - OLLAMA_LLM_LIBRARY=cuda_v11
-      - OLLAMA_DEBUG=1
-      - OLLAMA_NUM_GPU=1
-      - NVIDIA_DISABLE_REQUIRE=true 
-      - CUDA_CACHE_DISABLE=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - OLLAMA_MAX_VRAM=1500000000
     restart: always
     ports:
       - "11434:11434"
     volumes:
       - /home/userlnx/docker/ollama_data:/root/.ollama
-      - ./hf_cache:/root/.cache/torch/sentence_transformers
-      #- "/mnt/y/Virtual Machines/ollama/ollama_data:/root/.ollama"
     deploy:
       resources:
         reservations:
@@ -271,19 +277,24 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
   ai-agent:
     image: ollama-ai-agent:v1.0-gold
     container_name: ai-agent
     pull_policy: never
+    # AJUSTE 1: Define a pasta onde o dashboard.py realmente está
+    working_dir: /app/aiops/ollama
     environment:
       - OLLAMA_URL=http://ollama-server:11434/api/generate
+      - PYTHONUNBUFFERED=1
+    # AJUSTE 2: Comando aponta para o arquivo no local correto
     entrypoint: ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
     depends_on:
       - ollama-server
     ports:
       - "8501:8501"
-    volumes:          
-      - .:/app
+    volumes:
+      - /home/userlnx/docker/script_docker/card-system-api:/app
     deploy:
       resources:
         reservations:
@@ -337,9 +348,10 @@ echo " - 1 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
 echo " - 2 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
 echo " - 3 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3:8b-instruct-q4_0'"
 echo "4. Popular conteudo"
-echo " - 1 Use './add_knowledge.sh' para afinar o agente em tempo real."
-echo ' - 2 Exe: ./add_knowledge.sh "\$(cat ../../README.md)"'
-echo ' - 3   Para apagar base ./clear_knowledge.sh'
+echo " - 1 Use './aiops/ollama/add_knowledge.sh' para afinar o agente em tempo real."
+echo ' - 2 Exe: ./aiops/ollama/add_knowledge.sh "$(cat README.md)"'
+echo ' - 3   Para apagar base ./aiops/ollama/clear_knowledge.sh'
+echo ' - 4   Modo teste ./aiops/ollama/cfg_service.sh'
 echo "--------------------------------------------------------"
 
 # Passo 1: Preparação do Windows (Lado de Fora) Ele vai ativar o WSL e instalar o Debian
@@ -390,12 +402,12 @@ echo "2) AMD RX 580 (ROCm Polaris)"
 echo "3) APENAS CPU (Modo Xeon Estável - Sem GPU)"
 echo "------------------------------------------------"
 read -p "Selecione o hardware para aceleração: " hardware
-docker compose -f docker-compose_gtx760.yml up -d
 # 3. Subida inteligente (apenas uma vez)
 # SUBIDA DOS CONTAINERS (Interativo)
 if [ "$hardware" == "1" ]; then
     echo "🚀 Ativando aceleração NVIDIA..."
-    docker compose -f docker-compose_gtx760.yml up -d
+    export OLLAMA_MAX_VRAM=1600000000
+    docker compose -f docker-compose_gtx760.yml up -d 
 elif [ "$hardware" == "2" ]; then
     echo "🚀 Ativando aceleração AMD (ROCm)..."
     # Adicionando a remoção de containers órfãos para evitar o erro de porta ocupada
@@ -532,7 +544,8 @@ echo "1) NVIDIA GTX 760 (CUDA)"
 echo "2) AMD RX 580 (ROCm)"
 read -p "Opção: " hardware
 if [ "\$hardware" == "1" ]; then
-    docker-compose -f docker-compose_gtx760.yml up -d
+    export OLLAMA_MAX_VRAM=1600000000
+    docker-compose -f docker-compose_gtx760.yml up -d --force-recreate
     echo "Subindo modo NVIDIA..."
 else
     docker-compose -f docker-compose_rx580.yml up -d
@@ -566,10 +579,13 @@ chmod +x aiops/ollama/cfg_service.sh
 cat <<'EOF' > aiops/ollama/clear_knowledge.sh
 #!/bin/bash
 echo "🗑️ Iniciando limpeza do cérebro do Agente Córtex..."
-# 1. Parar o container para evitar corrupção de arquivos
+# 1. Limpa os arquivos físicos (O que o Dashboard lê)
+rm -rf ./aiops/ollama/brain/*.md
+echo "✅ Arquivos de memória física removidos."
+# 2. Parar o container para evitar corrupção de arquivos
 echo "🛑 Parando ai-agent..."
 docker stop ai-agent >/dev/null 2>&1
-# 2. Remover a pasta do banco vetorial
+# 3. Remover a pasta do banco vetorial
 if [ -d "./vector_db" ]; then
     echo "📂 Removendo banco de dados vetorial (vector_db)..."
     rm -rf ./vector_db
@@ -590,16 +606,21 @@ chmod +x aiops/ollama/clear_knowledge.sh
 # Use para adicionar qualquer regra específica que foi passada.
 cat <<'EOF' > aiops/ollama/add_knowledge.sh
 #!/bin/bash
+# Define o caminho absoluto baseado na localização do script
+BASE_DIR=$(dirname "$(readlink -f "$0")")
+BRAIN_DIR="$BASE_DIR/brain"
 if [ -z "$1" ]; then
     echo "Uso: ./add_knowledge.sh 'Minha instrução para a IA'"
     exit 1
 fi
-# 1. Garante que a pasta existe com permissão total usando 
-mkdir -p ./brain
-chmod 777 ./brain
-# 2. Escreve o arquivo usando para evitar o 'Permission denied'
-echo "$1" | tee ./brain/memo_$(date +%s).md > /dev/null
-# 3. Sincroniza com o container
+# 1. Garante a pasta no local correto
+mkdir -p "$BRAIN_DIR"
+chmod 777 "$BRAIN_DIR"
+# 2. Gera o arquivo
+FILENAME="memo_$(date +%s).md"
+echo "$1" > "$BRAIN_DIR/$FILENAME"
+echo "📝 Arquivo $FILENAME criado em $BRAIN_DIR"
+# 3. Sincroniza
 docker exec -it ai-agent python3 reindex_brain.py
 echo "✅ IA atualizada!"
 EOF
@@ -736,4 +757,5 @@ chmod +x aiops/ollama/check_infra.sh
 #echo 1 | tee /sys/bus/pci/rescan
 
 
+#Córtex, com base nos últimos documentos que foram indexados no seu cérebro via RAG, quais são os principais tópicos técnicos abordados sobre este projeto?
 #Córtex, quais são as 3 camadas da Arquitetura Hexagonal deste projeto e qual imagem Docker base é usada para o Java?

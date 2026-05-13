@@ -384,8 +384,10 @@ echo "3. Popular Conhecimento (RAG)"
 echo ' - 1 Exe: ./aiops/ollama/add_knowledge.sh "$(cat README.md)"'
 echo ' - 2 Limpar Cérebro: ./aiops/ollama/clear_knowledge.sh'
 echo ' - 3 Configurar serviço: ./aiops/ollama/cfg_service.sh'
-echo " - 4 Forçar Reindexação: docker exec -it ai-agent python3 aiops/ollama/reindex_brain.py"
-echo " - 5 Teste chroma_manager.py: "
+echo ' - 4 Configurar serviço: ./aiops/ollama/check_infra.sh'
+echo " - 5 Forçar Reindexação: docker exec -it ai-agent python3 aiops/ollama/reindex_brain.py"
+echo " - 6 Teste chroma_manager.py: "
+echo ""
 echo 'docker exec -it ai-agent python3 -c "'
 echo "import sys"
 echo "sys.path.append('/app/aiops/ollama')"
@@ -396,6 +398,7 @@ echo "resultado = get_context('quais bancos de dados o sistema usa?')"
 echo "print('\n📖 Conteúdo encontrado:')"
 echo "print(resultado)"
 echo '"'
+echo " - 7 Teste predictive_agent_rag.py: "
 echo ""
 echo " docker exec -it ai-agent python3 -c "
 echo "import sys"
@@ -693,6 +696,8 @@ cat <<'EOF' > aiops/ollama/check_infra.sh
 LOG_FILE="check_infra.log"
 {
     clear
+    apt update
+    apt install lm-sensors htop
     echo -e "\n\033[1;34m--- [REPORT DE HARDWARE: SRE CÓRTEX] ---\033[0m"
     echo "Data do Registro: $(date '+%d/%m/%Y %H:%M:%S')"
     # CPU Identification
@@ -730,7 +735,7 @@ LOG_FILE="check_infra.log"
         if (\$_.Name -like '*RX 580*') { 8 } # Patch manual baseado no GPU-Z
         else { [math]::round(\$val / 1GB, 0) }
     }}, DriverVersion | ft -AutoSize"
-    
+    echo "watch -n 1 sensors"
     echo "---------------------------------------"
 } | tee -a "$LOG_FILE"
 EOF

@@ -1,6 +1,7 @@
 #!/bin/bash
+clear
 mkdir -p aiops/ollama
-echo "🤖 [SRE Córtex] Iniciando instalação da IA Preditiva Santander..."
+echo "🤖 [SRE Córtex] Iniciando instalação da IA Preditiva ..."
 
 # 1. CRIANDO ESTRUTURA DE DIRETÓRIOS
 
@@ -16,7 +17,7 @@ import os
 import subprocess
 os.environ['TRANSFORMERS_OFFLINE'] = "1"
 os.environ['HF_DATASETS_OFFLINE'] = "1"
-st.set_page_config(page_title="SRE Córtex - Santander", layout="wide")
+st.set_page_config(page_title="SRE Córtex", layout="wide")
 st.title("🤖 SRE Córtex - Painel Preditivo")
 def get_gpu_info():
     try:
@@ -100,7 +101,7 @@ else:
     st.write("Nenhum conhecimento extra indexado ainda.")
 EOF
 
-# Indexa os manuais iniciais do Santander no banco de dados vetorial.
+# Indexa os manuais iniciais do banco de dados vetorial.
 cat <<'EOF' > aiops/ollama/predictive_agent_rag.py
 __import__('pysqlite3')
 import sys
@@ -130,7 +131,7 @@ def get_context(query):
 
 def ask_ollama(metrics, context, question, model="llama3:8b-instruct-q4_0"):
     system_instruction = (
-        "Você é o SRE CÓRTEX. Ignore biologia. Foque em TI/Santander."
+        "Você é o SRE CÓRTEX. Ignore biologia. Foque em TI."
     )
     full_prompt = f"{system_instruction}\nCONTEXTO: {context}\nMETRICAS: {metrics}\nPERGUNTA: {question}"
     
@@ -146,6 +147,34 @@ def ask_ollama(metrics, context, question, model="llama3:8b-instruct-q4_0"):
         return res.json()['response']
     except Exception as e:
         return f"Erro: {str(e)}"
+EOF
+
+cat <<'EOF' > aiops/ollama/chroma_manager.py
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import os
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
+# Caminhos internos do container
+DB_PATH = "/app/aiops/ollama/vector_db"
+MODEL_PATH = "/app/aiops/ollama/models/all-MiniLM-L6-v2"
+
+embeddings = HuggingFaceEmbeddings(
+    model_name=MODEL_PATH,
+    model_kwargs={'device': 'cpu'}
+)
+
+def get_context(query):
+    if os.path.exists(DB_PATH):
+        try:
+            vector_db = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
+            results = vector_db.similarity_search(query, k=3)
+            return "\n".join([res.page_content for res in results])
+        except Exception as e:
+            return f"Erro ao acessar banco vetorial: {str(e)}"
+    return "AVISO: Banco de dados vetorial não encontrado!"
 EOF
 
 # 3. GERANDO O SCRIPT DE RE-INDEXAÇÃO (Afinamento)
@@ -309,7 +338,7 @@ cat <<EOF > aiops/ollama/docker-compose_cpu.yml
 version: '3'
 services:
   ollama-server:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.17.4
     container_name: ollama-server
     restart: always
     ports:
@@ -318,40 +347,72 @@ services:
       - /home/userlnx/docker/ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_LLM_LIBRARY=cpu    # FORÇA o modo CPU logo na largada
+      - OLLAMA_NUM_PARALLEL=1
 
   ai-agent:
-    build:
-      context: .
-      dockerfile: Dockerfile.ai
     image: ollama-ai-agent:v1.0-gold
     container_name: ai-agent
+    pull_policy: never
+    # IMPORTANTE: O Dashboard.py está dentro de aiops/ollama/
+    working_dir: /app/aiops/ollama
     environment:
       - OLLAMA_HOST=ollama-server
       - OLLAMA_BASE_URL=http://ollama-server:11434
+    entrypoint: ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
     depends_on:
       - ollama-server
     ports:
       - "8501:8501"
     volumes:
-      - .:/app
+      # Mapeia a raiz do projeto para o /app do container
+      - /home/userlnx/docker/script_docker/card-system-api:/app
 EOF
 
 echo "--------------------------------------------------------"
 echo "✅ TUDO PRONTO! O Cérebro RAG foi configurado."
-echo "1. Subir container"
+echo "1. Subir Infra (Escolha uma opção)"
 echo " - 1 Só CPU 'docker compose -f aiops/ollama/docker-compose_cpu.yml up -d'"
 echo " - 2 RX580 'docker compose -f aiops/ollama/docker-compose_rx580.yml up -d' ."
 echo " - 3 GTX760 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d --force-recreate' ."
 echo " - 4 Assistente 'cd aiops/ollama && ./setup_ia.sh' ."
-echo "2. Baixar modelos"
+echo "2. Gerenciar Modelos (Recomendado: phi3:mini)"
 echo " - 1 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
 echo " - 2 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
 echo " - 3 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3:8b-instruct-q4_0'"
-echo "4. Popular conteudo"
-echo " - 1 Use './aiops/ollama/add_knowledge.sh' para afinar o agente em tempo real."
-echo ' - 2 Exe: ./aiops/ollama/add_knowledge.sh "$(cat README.md)"'
-echo ' - 3   Para apagar base ./aiops/ollama/clear_knowledge.sh'
-echo ' - 4   Modo teste ./aiops/ollama/cfg_service.sh'
+echo "3. Popular Conhecimento (RAG)"
+echo ' - 1 Exe: ./aiops/ollama/add_knowledge.sh "$(cat README.md)"'
+echo ' - 2 Limpar Cérebro: ./aiops/ollama/clear_knowledge.sh'
+echo ' - 3 Configurar serviço: ./aiops/ollama/cfg_service.sh'
+echo " - 4 Forçar Reindexação: docker exec -it ai-agent python3 aiops/ollama/reindex_brain.py"
+echo " - 5 Teste chroma_manager.py: "
+echo 'docker exec -it ai-agent python3 -c "'
+echo "import sys"
+echo "sys.path.append('/app/aiops/ollama')"
+echo "from chroma_manager import get_context"
+echo "# Testa se ele encontra algo sobre o banco de dados no seu README"
+echo "print('\n🔍 Buscando no banco vetorial...')"
+echo "resultado = get_context('quais bancos de dados o sistema usa?')"
+echo "print('\n📖 Conteúdo encontrado:')"
+echo "print(resultado)"
+echo '"'
+echo ""
+echo " docker exec -it ai-agent python3 -c "
+echo "import sys"
+echo "sys.path.append('/app/aiops/ollama')"
+echo "from chroma_manager import get_context"
+echo "from predictive_agent_rag import ask_ollama"
+echo "pergunta = 'Qual a base da arquitetura deste sistema?'"
+echo "contexto = get_context(pergunta)"
+echo "print('\n📖 [CONTEÚDO DO README]:')"
+echo "print(contexto)"
+echo "print('\n🤖 [RESPOSTA DO XEON]:')"
+echo "print(ask_ollama([], contexto, pergunta, model='tinyllama'))"
+echo '"'
+
+
+echo "--------------------------------------------------------"
+echo "🌐 Dashboard disponível em: http://localhost:8501"
 echo "--------------------------------------------------------"
 
 # Passo 1: Preparação do Windows (Lado de Fora) Ele vai ativar o WSL e instalar o Debian
@@ -569,7 +630,7 @@ echo "🚀 Execultado biblioteca de modelos para o Córtex..."
 # Substitua pelo IP real da sua máquina Xeon
 # curl http://192.168.x.x:11434/api/generate -d '{
 #   "model": "llama3:8b-instruct-q4_0",
-#   "prompt": "SRE Córtex, você está online na rede Santander?",
+#   "prompt": "SRE Córtex, você está online na rede?",
 #   "stream": false
 # }'
 EOF
@@ -714,7 +775,7 @@ chmod +x aiops/ollama/check_infra.sh
 #Reinicie o WSL (wsl --shutdown).
 #
 #docker tag ollama/ollama:0.17.4 sre-cortex-agent:v1.0
-#docker exec -it ollama-server ollama run tinyllama "SRE Córtex, analise: Latência subiu para 500ms no cluster Santander. O que fazer?"
+#docker exec -it ollama-server ollama run tinyllama "SRE Córtex, analise: Latência subiu para 500ms no cluster. O que fazer?"
 
 ## Libera a porta no firewall do Windows (Local)
 #New-NetFirewallRule -DisplayName "SRE-Cortex" -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow
@@ -759,3 +820,4 @@ chmod +x aiops/ollama/check_infra.sh
 
 #Córtex, com base nos últimos documentos que foram indexados no seu cérebro via RAG, quais são os principais tópicos técnicos abordados sobre este projeto?
 #Córtex, quais são as 3 camadas da Arquitetura Hexagonal deste projeto e qual imagem Docker base é usada para o Java?
+#Córtex, Qual a base da arquitetura deste sistema e qual imagem Docker ele usa para o Java?

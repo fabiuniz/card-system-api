@@ -301,6 +301,9 @@ services:
       - /home/userlnx/docker/ollama_data:/root/.ollama
     deploy:
       resources:
+        limits:
+          cpus: '6.0'        # Limita a 50% do seu Xeon (6 de 12 threads)
+          memory: 8G         # Limita a 8GB de RAM
         reservations:
           devices:
             - driver: nvidia
@@ -326,6 +329,9 @@ services:
       - /home/userlnx/docker/script_docker/card-system-api:/app
     deploy:
       resources:
+        limits:
+          cpus: '2.0'        # O agente de IA não precisa de muito
+          memory: 4G
         reservations:
           devices:
             - driver: nvidia
@@ -349,6 +355,11 @@ services:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_LLM_LIBRARY=cpu    # FORÇA o modo CPU logo na largada
       - OLLAMA_NUM_PARALLEL=1
+    deploy:
+      resources:
+        limits:
+          cpus: '6.0'        # Limita a 50% do seu Xeon (6 de 12 threads)
+          memory: 8G         # Limita a 8GB de RAM
 
   ai-agent:
     image: ollama-ai-agent:v1.0-gold
@@ -367,6 +378,11 @@ services:
     volumes:
       # Mapeia a raiz do projeto para o /app do container
       - /home/userlnx/docker/script_docker/card-system-api:/app
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'        # O agente de IA não precisa de muito
+          memory: 4G
 EOF
 
 echo "--------------------------------------------------------"

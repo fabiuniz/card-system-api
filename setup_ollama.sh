@@ -19,6 +19,58 @@ os.environ['TRANSFORMERS_OFFLINE'] = "1"
 os.environ['HF_DATASETS_OFFLINE'] = "1"
 st.set_page_config(page_title="SRE Córtex", layout="wide")
 st.title("🤖 SRE Córtex - Painel Preditivo")
+def get_gpu_metrics():
+    try:
+        # Consulta carga (utilization) e memória usada/total
+        cmd = "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits"
+        output = subprocess.check_output(cmd, shell=True).decode().strip()
+        if not output: return {"load": "N/A", "vram": "N/A", "raw_load": 0}
+        # Exemplo de saída: "15, 450, 1998" (Carga %, Mem Usada, Mem Total)
+        util, used, total = output.split(', ')
+        return {
+            "load": f"{util}%",
+            "vram": f"{used}MB / {total}MB",
+            "raw_load": int(util)
+        }
+    except:
+        return {"load": "N/A", "vram": "N/A", "raw_load": 0}
+def get_cpu_temp_pro():
+    try:
+        # Caminho validado via 'x86_pkg_temp'
+        path = "/sys/class/thermal/thermal_zone0/temp"
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                temp_raw = f.read().strip()
+                # Converte miligraus para Celsius
+                return f"{float(temp_raw) / 1000:.1f}°C"
+    except Exception:
+        return "N/A"
+    return "N/A"
+def get_temps():
+    temps = {}
+    try:
+        # Temperatura da CPU (Requer lm-sensors instalado no container)
+        # No WSL2, pode ser necessário ler de /sys/class/thermal/
+        tcore = psutil.sensors_temperatures()
+        if 'coretemp' in tcore:
+            temps['cpu'] = f"{tcore['coretemp'][0].current}°C"
+        else:
+            # Fallback para o modo "bruto" do Linux
+            cmd = "cat /sys/class/thermal/thermal_zone0/temp"
+            raw_temp = subprocess.check_output(cmd, shell=True).decode().strip()
+            temps['cpu'] = f"{int(raw_temp)/1000:.1f}°C"
+    except:
+        temps['cpu'] = "N/A"
+    try:
+        # Temperatura da GPU NVIDIA (GTX 760)
+        gpu_temp = subprocess.check_output(
+            "nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits", 
+            shell=True
+        ).decode().strip()
+        temps['gpu'] = f"{gpu_temp}°C"
+    except:
+        temps['gpu'] = "N/A"
+    return temps
 def get_gpu_info():
     try:
         # Tenta NVIDIA
@@ -32,6 +84,8 @@ def get_gpu_info():
         except:
             pass
     return "Executando em CPU", "Modo Xeon (AVX2)"
+# --- Frame Sidebar  ---
+# --- Sidebar do Streamlit ---
 gpu_label, motor = get_gpu_info()
 # Sidebar com Status do Hardware REAL da Máquina
 st.sidebar.header("📡 Status da Infra Local")
@@ -58,6 +112,28 @@ ram_livre = f"{mem.available / (1024**2):.0f} MB"
 st.sidebar.metric("Memória RAM", ram_total, f"Livre: {ram_livre}")
 # Exibe o status da GPU corrigido
 st.sidebar.metric("GPU Status", gpu_label, motor)
+# CPU
+st.sidebar.header("🌡️ Telemetria")
+telemetria = get_temps()
+col_temp1, col_temp2 = st.sidebar.columns(2)
+col_temp1.metric("Temp CPU", telemetria['cpu'])
+col_temp2.metric("Temp GPU", telemetria['gpu'])
+# Barra de progresso para Uso de Recursos
+cpu_usage = psutil.cpu_percent()
+st.sidebar.write(f"Carga CPU: {cpu_usage}%")
+st.sidebar.progress(cpu_usage / 100)
+st.sidebar.metric("Temp Real CPU", get_cpu_temp_pro())
+#GPU
+gpu_data = get_gpu_metrics()
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    st.metric("Carga GPU", gpu_data['load'])
+with col2:
+    st.metric("VRAM", gpu_data['vram'])
+# Alerta visual se a VRAM estiver cheia (estouro de memória)
+if "1998MB" in gpu_data['vram'] and gpu_data['raw_load'] < 5:
+    st.sidebar.warning("⚠️ VRAM Esgotada: O modelo está rodando na CPU!")
+# --- Frame Main  ---
 # --- Área de Métricas em Tempo Real ---
 col1, col2, col3 = st.columns(3)
 col1.metric("Latência Média", "250ms", "+10ms")
@@ -84,19 +160,25 @@ if user_input:
         
         st.write("### 📢 Insight do Engenheiro SRE:")
         st.info(resposta)
-# Tabela de logs do 'Cérebro'
+# Tabela de logs do 'Cérebro' (CAMINHO DINÂMICO INTERNO DO DOCKER AJUSTADO)
 st.subheader("📂 Conhecimento Indexado (RAG Memory)")
-if os.path.exists("./brain"):
-    arquivos = os.listdir("./brain")
-    datas = [
-        pd.to_datetime(os.path.getmtime(os.path.join("./brain", f)), unit='s').strftime('%d/%m/%Y %H:%M') 
-        for f in arquivos
-    ]
-    st.table(pd.DataFrame({
-        "Fonte de Dados": arquivos,
-        "Data de Indexação": datas,
-        "Status": ["✅ Ativo" for _ in arquivos]
-    }))
+BASE_DIR_CONTAINER = os.path.dirname(os.path.abspath(__file__))
+caminho_brain = os.path.join(BASE_DIR_CONTAINER, "brain")
+
+if os.path.exists(caminho_brain):
+    arquivos = [f for f in os.listdir(caminho_brain) if f.endswith('.md')]
+    if arquivos:
+        datas = [
+            pd.to_datetime(os.path.getmtime(os.path.join(caminho_brain, f)), unit='s').strftime('%d/%m/%Y %H:%M') 
+            for f in arquivos
+        ]
+        st.table(pd.DataFrame({
+            "Fonte de Dados": arquivos,
+            "Data de Indexação": datas,
+            "Status": ["✅ Ativo" for _ in arquivos]
+        }))
+    else:
+        st.write("Nenhum conhecimento extra indexado ainda.")
 else:
     st.write("Nenhum conhecimento extra indexado ainda.")
 EOF
@@ -122,16 +204,17 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 def get_context(query):
-    db_path = "/app/vector_db"
+    # Forçado caminho absoluto unificado com a raiz do volume montado
+    db_path = "/app/aiops/ollama/vector_db"
     if os.path.exists(db_path):
         vector_db = Chroma(persist_directory=db_path, embedding_function=embeddings)
-        results = vector_db.similarity_search(query, k=3)
+        results = vector_db.similarity_search(query, k=2) # K reduzido para economizar processamento na CPU do Xeon
         return "\n".join([res.page_content for res in results])
-    return "AVISO: O MANUAL TÉCNICO NÃO FOI ENCONTRADO!"
+    return "AVISO: O MANUAL TÉCNICO NÃO FOI ENCONTRADO NO DIRETÓRIO INTEGRADO!"
 
-def ask_ollama(metrics, context, question, model="llama3:8b-instruct-q4_0"):
+def ask_ollama(metrics, context, question, model="tinyllama"):
     system_instruction = (
-        "Você é o SRE CÓRTEX. Ignore biologia. Foque em TI."
+        "Você é o SRE CÓRTEX. Seja extremamente direto e curto. Responda em no máximo 3 frases."
     )
     full_prompt = f"{system_instruction}\nCONTEXTO: {context}\nMETRICAS: {metrics}\nPERGUNTA: {question}"
     
@@ -139,14 +222,19 @@ def ask_ollama(metrics, context, question, model="llama3:8b-instruct-q4_0"):
         "model": model,
         "prompt": full_prompt,
         "stream": False,
-        "options": {"num_gpu": 5}
+        "options": {
+            "num_gpu": 0,          # Força a CPU no backend do Ollama
+            "num_thread": 6,       # Usa metade das threads do seu Xeon para não travar o host
+            "num_predict": 150     # Limita a resposta a ~150 tokens para responder rápido na CPU
+        }
     }
     
     try:
-        res = requests.post(OLLAMA_URL, json=payload, timeout=300)
+        # Aumentamos o timeout para infinito (None) nas consultas de CPU pesadas
+        res = requests.post(OLLAMA_URL, json=payload, timeout=None)
         return res.json()['response']
     except Exception as e:
-        return f"Erro: {str(e)}"
+        return f"Erro na IA: {str(e)}"
 EOF
 
 cat <<'EOF' > aiops/ollama/chroma_manager.py
@@ -182,18 +270,35 @@ cat <<'EOF' > aiops/ollama/reindex_brain.py
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import os
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
-print("🔄 Sincronizando novos conhecimentos...")
-embeddings = HuggingFaceEmbeddings(model_name="./models/all-MiniLM-L6-v2")
-loader = DirectoryLoader('./brain', glob="**/*.md", loader_cls=TextLoader)
+print("🔄 Sincronizando novos conhecimentos no banco vetorial...")
+# CORREÇÃO: Forçando o caminho absoluto validado dentro do volume do container
+MODEL_PATH = "/app/aiops/ollama/models/all-MiniLM-L6-v2"
+BRAIN_DIR = "/app/aiops/ollama/brain"
+DB_DIR = "/app/aiops/ollama/vector_db"
+if not os.path.exists(MODEL_PATH):
+    print(f"❌ ERRO: O modelo de embedding não foi encontrado em: {MODEL_PATH}")
+    sys.exit(1)
+embeddings = HuggingFaceEmbeddings(
+    model_name=MODEL_PATH,
+    model_kwargs={'device': 'cpu'}
+)
+# Carrega os documentos MD da pasta correta
+loader = DirectoryLoader(BRAIN_DIR, glob="**/*.md", loader_cls=TextLoader)
 documents = loader.load()
 if documents:
-    vector_db = Chroma.from_documents(documents=documents, embedding=embeddings, persist_directory="./vector_db")
-    print(f"✅ {len(documents)} arquivos de conhecimento indexados.")
+    # Cria/Atualiza o banco Chroma persistente
+    vector_db = Chroma.from_documents(
+        documents=documents, 
+        embedding=embeddings, 
+        persist_directory=DB_DIR
+    )
+    print(f"✅ Sucesso! {len(documents)} arquivo(s) de conhecimento indexado(s) no SRE Córtex.")
 else:
-    print("⚠️ Pasta 'brain' vazia. Adicione arquivos .md para ensinar a IA.")
+    print("⚠️ Pasta 'brain' vazia ou sem arquivos .md válidos para indexação.")
 EOF
 
 # 4. GERANDO O DOCKERFILE DO AGENTE
@@ -286,7 +391,7 @@ EOF
 
 # 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE) #latest # 0.1.32 #0.17.4 #0.1.32
 cat <<EOF > aiops/ollama/docker-compose_gtx760.yml
-version: '3'
+version: '3.8'
 services:
   ollama-server:
     image: ollama/ollama:0.17.4
@@ -294,6 +399,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - OLLAMA_MAX_VRAM=1500000000
+      - OLLAMA_NUM_PARALLEL=1
     restart: always
     ports:
       - "11434:11434"
@@ -302,8 +408,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '6.0'        # Limita a 50% do seu Xeon (6 de 12 threads)
-          memory: 8G         # Limita a 8GB de RAM
+          cpus: '6.0'        # Preserva 6 threads para o sistema operacional
+          memory: 8G
         reservations:
           devices:
             - driver: nvidia
@@ -314,13 +420,11 @@ services:
     image: ollama-ai-agent:v1.0-gold
     container_name: ai-agent
     pull_policy: never
-    # AJUSTE 1: Define a pasta onde o dashboard.py realmente está
-    working_dir: /app/aiops/ollama
+    working_dir: /app
     environment:
       - OLLAMA_URL=http://ollama-server:11434/api/generate
       - PYTHONUNBUFFERED=1
-    # AJUSTE 2: Comando aponta para o arquivo no local correto
-    entrypoint: ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    entrypoint: ["streamlit", "run", "aiops/ollama/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
     depends_on:
       - ollama-server
     ports:
@@ -330,13 +434,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'        # O agente de IA não precisa de muito
+          cpus: '2.0'
           memory: 4G
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 EOF
 
 # 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
@@ -362,6 +461,9 @@ services:
           memory: 8G         # Limita a 8GB de RAM
 
   ai-agent:
+      build:
+      context: .
+      dockerfile: Dockerfile.ai
     image: ollama-ai-agent:v1.0-gold
     container_name: ai-agent
     pull_policy: never
@@ -388,8 +490,8 @@ EOF
 echo "--------------------------------------------------------"
 echo "✅ TUDO PRONTO! O Cérebro RAG foi configurado."
 echo "1. Subir Infra (Escolha uma opção)"
-echo " - 1 Só CPU 'docker compose -f aiops/ollama/docker-compose_cpu.yml up -d'"
-echo " - 2 RX580 'docker compose -f aiops/ollama/docker-compose_rx580.yml up -d' ."
+echo " - 1 Só CPU 'docker compose -f aiops/ollama/docker-compose_cpu.yml up -d --build'"
+echo " - 2 RX580 'docker compose -f aiops/ollama/docker-compose_rx580.yml up -d --build' ."
 echo " - 3 GTX760 'docker compose -f aiops/ollama/docker-compose_gtx760.yml up -d --force-recreate' ."
 echo " - 4 Assistente 'cd aiops/ollama && ./setup_ia.sh' ."
 echo "2. Gerenciar Modelos (Recomendado: phi3:mini)"
@@ -464,6 +566,7 @@ EOF
 # Este é o seu "orquestrador". Ele vai baixar as imagens Docker, montar os discos e clonar o projeto
 cat <<'EOF' > aiops/ollama/setup_ia.sh
 #!/bin/bash
+mkdir -p pip_cache
 echo "🚀 Iniciando Preparação do Ambiente SRE Córtex no Debian..."
 # 1. Construir a imagem obrigatoriamente (o --build garante que o pysqlite3 seja instalado)
 echo "📦 Construindo imagem do Agente (Garante a instalação das dependências)..."
@@ -658,50 +761,52 @@ chmod +x aiops/ollama/cfg_service.sh
 # Passo 4: Alimentação e Validação
 cat <<'EOF' > aiops/ollama/clear_knowledge.sh
 #!/bin/bash
-echo "🗑️ Iniciando limpeza do cérebro do Agente Córtex..."
-# 1. Limpa os arquivos físicos (O que o Dashboard lê)
-rm -rf ./aiops/ollama/brain/*.md
-echo "✅ Arquivos de memória física removidos."
-# 2. Parar o container para evitar corrupção de arquivos
-echo "🛑 Parando ai-agent..."
-docker stop ai-agent >/dev/null 2>&1
-# 3. Remover a pasta do banco vetorial
-if [ -d "./vector_db" ]; then
-    echo "📂 Removendo banco de dados vetorial (vector_db)..."
-    rm -rf ./vector_db
-    echo "✅ Banco de dados removido com sucesso."
-else
-    echo "ℹ️  O banco de dados vetorial já estava limpo."
-fi
-# 3. Reiniciar o container
-echo "🚀 Reiniciando ai-agent..."
-docker start ai-agent >/dev/null 2>&1
+BASE_DIR=$(dirname "$(readlink -f "$0")")
+echo "🗑️ [FORÇA BRUTA] Iniciando limpeza profunda do cérebro..."
+# 1. Limpa o Host (Garantia)
+echo "📂 Removendo arquivos locais no Host..."
+rm -f "$BASE_DIR/brain"/*.md 2>/dev/null
+rm -rf "$BASE_DIR/vector_db" 2>/dev/null
+rm -f ./brain/*.md 2>/dev/null
+rm -rf ./vector_db 2>/dev/null
+# 2. Executa a limpeza INSIDE (Dentro do container rodando)
+# Isso limpa o diretório exato que o Streamlit está visualizando
+echo "🐳 Invadindo container ai-agent para eliminar arquivos fantasmas..."
+docker exec -it ai-agent sh -c "rm -f ./brain/*.md ./aiops/ollama/brain/*.md 2>/dev/null"
+docker exec -it ai-agent sh -c "rm -rf ./vector_db ./aiops/ollama/vector_db 2>/dev/null"
+# 3. Reinicia os serviços para limpar o cache de memória do Streamlit e do Chroma
+echo "🔄 Reiniciando containers para aplicar o Hard Reset..."
+docker stop ai-agent ollama-server >/dev/null 2>&1
+docker start ollama-server ai-agent >/dev/null 2>&1
 echo "------------------------------------------------"
-echo "✨ Cérebro resetado! O Agente agora está puro."
-echo "💡 Próximo passo: Rode ./add_knowledge.sh para indexar o README correto."
+echo "✨ Cérebro resetado por completo no Host e no Container!"
+echo "🔄 DICA: Dê um CTRL + F5 no navegador para limpar o cache da página."
 echo "------------------------------------------------"
 EOF
 chmod +x aiops/ollama/clear_knowledge.sh
+chmod +x aiops/ollama/clear_knowledge.sh
+
 # ------------------------------------------------------------------------------------
 # Use para adicionar qualquer regra específica que foi passada.
 cat <<'EOF' > aiops/ollama/add_knowledge.sh
 #!/bin/bash
-# Define o caminho absoluto baseado na localização do script
+# Define o caminho absoluto baseado na localização do script no Host
 BASE_DIR=$(dirname "$(readlink -f "$0")")
 BRAIN_DIR="$BASE_DIR/brain"
 if [ -z "$1" ]; then
-    echo "Uso: ./add_knowledge.sh 'Minha instrução para a IA'"
+    echo "⚠️ Uso: ./add_knowledge.sh 'Minha instrução para a IA'"
     exit 1
 fi
-# 1. Garante a pasta no local correto
+# 1. Garante que a pasta exista no local correto com permissões totais
 mkdir -p "$BRAIN_DIR"
 chmod 777 "$BRAIN_DIR"
-# 2. Gera o arquivo
+# 2. Gera o arquivo de memória com timestamp único
 FILENAME="memo_$(date +%s).md"
 echo "$1" > "$BRAIN_DIR/$FILENAME"
-echo "📝 Arquivo $FILENAME criado em $BRAIN_DIR"
-# 3. Sincroniza
-docker exec -it ai-agent python3 reindex_brain.py
+echo "📝 Arquivo $FILENAME criado com sucesso em $BRAIN_DIR"
+# 3. CORREÇÃO DO CAMINHO: Executa a sincronização apontando para o diretório correto no container
+echo "🔄 Acionando o reindexador do Córtex dentro do container..."
+docker exec -it ai-agent python3 /app/aiops/ollama/reindex_brain.py
 echo "✅ IA atualizada!"
 EOF
 chmod +x aiops/ollama/add_knowledge.sh
@@ -751,7 +856,9 @@ LOG_FILE="check_infra.log"
         if (\$_.Name -like '*RX 580*') { 8 } # Patch manual baseado no GPU-Z
         else { [math]::round(\$val / 1GB, 0) }
     }}, DriverVersion | ft -AutoSize"
-    echo "watch -n 1 sensors"
+    # Adiciona monitoramento em tempo real no terminal
+    echo "Para monitorar via terminal, use:"
+    echo "watch -n 1 'nvidia-smi && sensors'"
     echo "---------------------------------------"
 } | tee -a "$LOG_FILE"
 EOF
@@ -842,3 +949,8 @@ chmod +x aiops/ollama/check_infra.sh
 #Córtex, com base nos últimos documentos que foram indexados no seu cérebro via RAG, quais são os principais tópicos técnicos abordados sobre este projeto?
 #Córtex, quais são as 3 camadas da Arquitetura Hexagonal deste projeto e qual imagem Docker base é usada para o Java?
 #Córtex, Qual a base da arquitetura deste sistema e qual imagem Docker ele usa para o Java?
+#Córtex, quais bancos de dados o sistema usa?
+#Córtex, O sistema usa Docker e Python?, Qual a stack?
+#docker exec -it ai-agent pip install streamlit-autorefresh
+#FIND_LINKS=$(find ./cache_app/bin_pip -name "*.whl" -printf "--find-links=%h " | sort -u) && \
+#pip install --break-system-packages --no-index $FIND_LINKS -r requirements.txt

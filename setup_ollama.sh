@@ -1,4 +1,5 @@
 #!/bin/bash
+#setup_ollama.sh
 clear
 mkdir -p aiops/ollama
 echo "🤖 [SRE Córtex] Iniciando instalação da IA Preditiva ..."
@@ -214,7 +215,7 @@ def get_context(query):
 
 def ask_ollama(metrics, context, question, model="tinyllama"):
     system_instruction = (
-        "Você é o SRE CÓRTEX. Seja extremamente direto e curto. Responda em no máximo 3 frases."
+        "Você é o SRE CÓRTEX. Baseie-se APENAS no contexto fornecido. Se a resposta não estiver explicitamente no contexto, responda estritamente: 'Dados insuficientes no cérebro RAG'."
     )
     full_prompt = f"{system_instruction}\nCONTEXTO: {context}\nMETRICAS: {metrics}\nPERGUNTA: {question}"
     
@@ -224,13 +225,14 @@ def ask_ollama(metrics, context, question, model="tinyllama"):
         "stream": False,
         "options": {
             "num_gpu": 0,          # Força a CPU no backend do Ollama
-            "num_thread": 6,       # Usa metade das threads do seu Xeon para não travar o host
-            "num_predict": 150     # Limita a resposta a ~150 tokens para responder rápido na CPU
+            "num_thread": 6,       # Usa metade das threads do seu Xeon
+            "temperature": 0.0,    # 2. Mudado para 0.0 para eliminar a "criatividade" e focar em extração de dados
+            "top_p": 0.1,          # 3. Adicionado para limitar ainda mais as chances de alucinação
+            "num_predict": 512     # 4. Ajustado: 1024 tokens são aproximadamente ~750 palavras. Para respostas rápidas na CPU, 512 basta.
         }
     }
     
     try:
-        # Aumentamos o timeout para infinito (None) nas consultas de CPU pesadas
         res = requests.post(OLLAMA_URL, json=payload, timeout=None)
         return res.json()['response']
     except Exception as e:
@@ -530,7 +532,14 @@ echo "print(contexto)"
 echo "print('\n🤖 [RESPOSTA DO XEON]:')"
 echo "print(ask_ollama([], contexto, pergunta, model='tinyllama'))"
 echo '"'
-
+echo 'for arquivo in /home/userlnx/docker/ollama_data/docs/adsa/*.vtt; do'
+echo '    [ -e "$arquivo" ] || continue'
+echo '    nome_base=$(basename "$arquivo" .vtt)'
+echo '    # Copia o conteúdo do vtt direto para um arquivo .md na pasta brain'
+echo '    cat "$arquivo" > "./aiops/ollama/brain/${nome_base}.md"'
+echo '    echo "Texto preparado: ${nome_base}.md"'
+echo 'done'
+echo 'docker exec -it ai-agent python3 aiops/ollama/reindex_brain.py'
 
 echo "--------------------------------------------------------"
 echo "🌐 Dashboard disponível em: http://localhost:8501"
@@ -951,6 +960,7 @@ chmod +x aiops/ollama/check_infra.sh
 #Córtex, Qual a base da arquitetura deste sistema e qual imagem Docker ele usa para o Java?
 #Córtex, quais bancos de dados o sistema usa?
 #Córtex, O sistema usa Docker e Python?, Qual a stack?
+#Córtex, quais os capítulos lidos no dia 3 ?
 #docker exec -it ai-agent pip install streamlit-autorefresh
 #FIND_LINKS=$(find ./cache_app/bin_pip -name "*.whl" -printf "--find-links=%h " | sort -u) && \
 #pip install --break-system-packages --no-index $FIND_LINKS -r requirements.txt

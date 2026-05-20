@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#setup_k8s.sh
 # Define a raiz do projeto dinamicamente para evitar caminhos fixos "hardcoded"
 BASE_DIR=$(pwd)
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#setup_terraform.sh
 # Garante que estamos na raiz do projeto para começar
 BASE_DIR=$(pwd)
 

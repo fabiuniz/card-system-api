@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#setup_front_flutter.sh
 # Configurações iniciais
 BASE_FOLDER="card-system-front-flutter"
 rm -rf $BASE_FOLDER

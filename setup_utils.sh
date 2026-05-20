@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#setup_utils.sh
 # --- FUNÇÕES DE INSTALAÇÃO (Extraídas de lib_bash.sh) ---
 
 install_docker_if_missing() {

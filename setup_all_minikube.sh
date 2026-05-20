@@ -1,4 +1,5 @@
 #!/bin/bash
+#setup_all_minikube.sh
 
 echo "📦 Carregando imagem base do Minikube..."
 #docker pull gcr.io/k8s-minikube/kicbase:v0.0.44

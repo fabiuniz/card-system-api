@@ -1,4 +1,5 @@
 #!/bin/bash
+#setup_project.sh
 clear
 # --- FUNÇÃO DE VERIFICAÇÃO DE DEPENDÊNCIAS ---
 verificar_ferramentas() {

@@ -1,3 +1,5 @@
+#!/bin/bash
+#setup_databases.sh
 cd ${PROJETO_CONF[PROJECT_NAME]}
 
 

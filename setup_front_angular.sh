@@ -1,4 +1,5 @@
 #!/bin/bash
+#setup_front_angular.sh
 ANGULAR_DIR="card-system-front-angular"
 
 # 1. GARANTE QUE A ESTRUTURA EXISTE

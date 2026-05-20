@@ -1,3 +1,5 @@
+#!/bin/bash
+#setup_application.sh
 cat <<EOF > monitoring/grafana/provisioning/dashboards/santander_transactions.json
 {
   "annotations": { "list": [ { "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard" } ] },

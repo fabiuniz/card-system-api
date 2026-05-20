@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#setup_iot.sh
 # Validação do contexto
 if [[ -z "${PROJETO_CONF[PROJECT_NAME]}" ]]; then
     API_URL="http://192.168.1.100:8080/actuator/health" # IP de exemplo

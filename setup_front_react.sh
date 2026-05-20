@@ -1,4 +1,5 @@
 # #!/bin/bash
+# setup_front_react.sh
 REACT_DIR="card-system-front-react"
 
 # 1. CRIA A ESTRUTURA DE PASTAS

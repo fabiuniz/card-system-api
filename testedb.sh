@@ -1,4 +1,5 @@
 #!/bin/bash
+#testedb.sh
 clear
 # Função para trocar o banco e reiniciar a API
 switch_db() {

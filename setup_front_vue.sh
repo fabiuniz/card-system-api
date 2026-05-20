@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#setup_front_vue.sh
 # Validação das configurações do projeto
 if [[ -z "${PROJETO_CONF[PROJECT_NAME]}" ]]; then
     FRONT_DIR="card-system-front-vue"

@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#setup_iaas.sh
 # Validação simples: se o array não existir, para o script
 if [[ -z "${PROJETO_CONF[PROJECT_NAME]}" ]]; then
     echo "🚨 Erro: Configurações do projeto não encontradas!"

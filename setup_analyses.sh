@@ -1,4 +1,5 @@
 #!/bin/bash
+#setup_analyses.sh
 
 # Validação das configurações do projeto
 if [[ -z "${PROJETO_CONF[PROJECT_NAME]}" ]]; then

@@ -16,6 +16,7 @@ import platform
 import psutil
 import os
 import subprocess
+from streamlit_autorefresh import st_autorefresh
 os.environ['TRANSFORMERS_OFFLINE'] = "1"
 os.environ['HF_DATASETS_OFFLINE'] = "1"
 st.set_page_config(page_title="SRE Córtex", layout="wide")
@@ -51,7 +52,6 @@ def get_temps():
     temps = {}
     try:
         # Temperatura da CPU (Requer lm-sensors instalado no container)
-        # No WSL2, pode ser necessário ler de /sys/class/thermal/
         tcore = psutil.sensors_temperatures()
         if 'coretemp' in tcore:
             temps['cpu'] = f"{tcore['coretemp'][0].current}°C"
@@ -85,56 +85,70 @@ def get_gpu_info():
         except:
             pass
     return "Executando em CPU", "Modo Xeon (AVX2)"
-# --- Frame Sidebar  ---
-# --- Sidebar do Streamlit ---
-gpu_label, motor = get_gpu_info()
-# Sidebar com Status do Hardware REAL da Máquina
-st.sidebar.header("📡 Status da Infra Local")
-# Detecta Processador e Threads
-def get_detailed_cpu():
-    try:
-        # Tenta ler diretamente do sistema de arquivos do Linux (mais preciso no WSL)
-        with open("/proc/cpuinfo", "r") as f:
-            for line in f:
-                if "model name" in line:
-                    return line.split(":")[1].strip()
-    except:
-        return platform.processor()
-cpu_model = get_detailed_cpu()
-# Exibe no Sidebar sem cortes bruscos
-st.sidebar.subheader("💻 Processador")
-st.sidebar.info(f"{cpu_model}")
-st.sidebar.write(f"**Threads:** {os.cpu_count()} | **Arquitetura:** {platform.machine()}")
-# Detecta RAM Total e Livre
-mem = psutil.virtual_memory()
-ram_total = f"{mem.total / (1024**3):.2f} GB"
-ram_livre = f"{mem.available / (1024**2):.0f} MB"
-st.sidebar.metric("Memória RAM", ram_total, f"Livre: {ram_livre}")
-# Exibe o status da GPU corrigido
-st.sidebar.metric("GPU Status", gpu_label, motor)
-# CPU
-st.sidebar.header("🌡️ Telemetria")
-telemetria = get_temps()
-col_temp1, col_temp2 = st.sidebar.columns(2)
-col_temp1.metric("Temp CPU", telemetria['cpu'])
-col_temp2.metric("Temp GPU", telemetria['gpu'])
-# Barra de progresso para Uso de Recursos
-cpu_usage = psutil.cpu_percent()
-st.sidebar.write(f"Carga CPU: {cpu_usage}%")
-st.sidebar.progress(cpu_usage / 100)
-st.sidebar.metric("Temp Real CPU", get_cpu_temp_pro())
-#GPU
-gpu_data = get_gpu_metrics()
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    st.metric("Carga GPU", gpu_data['load'])
-with col2:
-    st.metric("VRAM", gpu_data['vram'])
-# Alerta visual se a VRAM estiver cheia (estouro de memória)
-if "1998MB" in gpu_data['vram'] and gpu_data['raw_load'] < 5:
-    st.sidebar.warning("⚠️ VRAM Esgotada: O modelo está rodando na CPU!")
-# --- Frame Main  ---
-# --- Área de Métricas em Tempo Real ---
+
+# --- Frame Sidebar ---
+@st.fragment
+def render_dynamic_sidebar():
+    # O auto-refresh garante a atualização local dentro do fragmento
+    st_autorefresh(interval=3000, limit=None, key="sidebar_refresh")
+    
+    # IMPORTANTE: Sem o prefixo 'st.sidebar.' aqui dentro!
+    st.header("📡 Status da Infra Local")
+    
+    def get_detailed_cpu():
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if "model name" in line:
+                        return line.split(":")[1].strip()
+        except:
+            return platform.processor()
+            
+    cpu_model = get_detailed_cpu()
+    
+    st.subheader("💻 Processador")
+    st.info(f"{cpu_model}")
+    st.write(f"**Threads:** {os.cpu_count()} | **Arquitetura:** {platform.machine()}")
+    
+    # RAM
+    mem = psutil.virtual_memory()
+    ram_total = f"{mem.total / (1024**3):.2f} GB"
+    ram_livre = f"{mem.available / (1024**2):.0f} MB"
+    st.metric("Memória RAM", ram_total, f"Livre: {ram_livre}")
+    
+    # Correção do Erro 2: Coletando os dados da GPU antes de renderizar na tela
+    gpu_label, motor = get_gpu_info()
+    st.metric("GPU Status", gpu_label, motor)
+    
+    # Telemetria de Temperatura
+    st.header("🌡️ Telemetria")
+    telemetria = get_temps()
+    col_temp1, col_temp2 = st.columns(2)
+    col_temp1.metric("Temp CPU", telemetria['cpu'])
+    col_temp2.metric("Temp GPU", telemetria['gpu'])
+    
+    # Carga de CPU
+    cpu_usage = psutil.cpu_percent()
+    st.write(f"Carga CPU: {cpu_usage}%")
+    st.progress(cpu_usage / 100)
+    st.metric("Temp Real CPU", get_cpu_temp_pro())
+    
+    # Métricas da GPU
+    gpu_data = get_gpu_metrics()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Carga GPU", gpu_data['load'])
+    with col2:
+        st.metric("VRAM", gpu_data['vram'])
+        
+    if "1998MB" in gpu_data['vram'] and gpu_data['raw_load'] < 5:
+        st.warning("⚠️ VRAM Esgotada: O modelo está rodando na CPU!")
+
+# --- Inicialização da Sidebar no Contexto Correto ---
+with st.sidebar:
+    render_dynamic_sidebar()
+
+# --- Frame Main ---
 col1, col2, col3 = st.columns(3)
 col1.metric("Latência Média", "250ms", "+10ms")
 col2.metric("Taxa de Erro", "2%", "-0.5%")
@@ -216,7 +230,9 @@ with st.expander("🛠️ Personalizar Parâmetros do Agente (Ollama Options)"):
         "temperature": temperature,
         "top_k": top_k,
         "top_p": top_p,
-        "system": custom_system
+        "system": custom_system,
+        "num_ctx": 4096,        # Limitação preventiva de Contexto adicionada via código
+        "num_thread": 6         # Otimização estática para o processador Xeon E5
     }
 user_input = st.text_input("Descreva o incidente ou peça uma análise:")
 if user_input:
@@ -389,6 +405,7 @@ langchain-community
 chromadb
 sentence-transformers
 pysqlite3-binary
+streamlit-autorefresh
 EOF
 
 cat <<EOF > aiops/ollama/Dockerfile.ai
@@ -467,7 +484,7 @@ EOF
 
 # 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE) #latest # 0.1.32 #0.17.4 #0.1.32
 cat <<EOF > aiops/ollama/docker-compose_gtx760.yml
-version: '3.8'
+version: '3'
 services:
   ollama-server:
     image: ollama/ollama:0.17.4
@@ -1034,7 +1051,8 @@ chmod +x aiops/ollama/check_infra.sh
 #Córtex, Qual a base da arquitetura deste sistema e qual imagem Docker ele usa para o Java?
 #Córtex, quais bancos de dados o sistema usa?
 #Córtex, O sistema usa Docker e Python?, Qual a stack?
-#Quais os capítulos lidos no terceiro dia  ?
+#Quais os capítulos lidos no terceiro dia de leitura ?
 #docker exec -it ai-agent pip install streamlit-autorefresh
+#docker commit ai-agent ollama-ai-agent:v1.0-gold
 #FIND_LINKS=$(find ./cache_app/bin_pip -name "*.whl" -printf "--find-links=%h " | sort -u) && \
 #pip install --break-system-packages --no-index $FIND_LINKS -r requirements.txt

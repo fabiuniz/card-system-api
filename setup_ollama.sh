@@ -91,7 +91,6 @@ gpu_label, motor = get_gpu_info()
 # Sidebar com Status do Hardware REAL da Máquina
 st.sidebar.header("📡 Status da Infra Local")
 # Detecta Processador e Threads
-# No dashboard.py, procure a parte do cpu_info e substitua por:
 def get_detailed_cpu():
     try:
         # Tenta ler diretamente do sistema de arquivos do Linux (mais preciso no WSL)
@@ -142,30 +141,103 @@ col2.metric("Taxa de Erro", "2%", "-0.5%")
 col3.metric("Status do Modelo", "Ollama Engine", "Online")
 # Interface de Chat com a IA
 st.subheader("🧠 Consulta ao Agente RAG")
-modelo_selecionado = st.selectbox(
-    "Escolha o Modelo de Análise:",
-    ["tinyllama", "phi3:mini", "llama3:8b-instruct-q4_0"],
-    index=0,
-    help="Phi3: Rápido (GPU/CPU). Llama3: Completo (Exige o Xeon). TinyLlama: Para análises leves."
-)
+#Personalizar Parâmetros
+col_mod1, col_mod2 = st.columns([2, 3])
+with col_mod1:
+    modelo_selecionado = st.selectbox(
+        "Escolha o Modelo de Análise:",
+        ["tinyllama", "phi3:mini", "llama3:8b-instruct-q4_0"],
+        index=0,
+        help="Phi3: Rápido (GPU/CPU). Llama3: Completo (Exige o Xeon). TinyLlama: Para análises leves."
+    )
+# --- ⚙️ Dicionário de Mensagens Predefinidas (Dropbox) ---
+SYSTEM_PROMPTS_POOL = {
+    "Padrão (IAOps & Infra)": (
+        "Você é um Engenheiro SRE especialista em infraestrutura e IAOps. "
+        "Analise os dados e métricas fornecidos com foco estritamente técnico, "
+        "evitando misturar o contexto de documentos se não houver correlação direta."
+    ),
+    "Diagnóstico de Gargalos (Performance)": (
+        "Você é um especialista em Performance Engineering e Linux Internals. "
+        "Analise os logs e a telemetria focando estritamente em contenção de CPU, "
+        "latência de instruções (AVX), eficiência de cache L3 e paginação de memória."
+    ),
+    "Otimização de RAG & Contexto": (
+        "Você é um Arquiteto de Soluções de IA especializado em LLMs locais e RAG. "
+        "Analise o volume de documentos indexados e sugira estratégias de chunking, "
+        "limitação de Top-K e redução de tamanho do prompt para evitar estoiros de timeout."
+    ),
+    "Análise Teológica (Foco nos Dados de Leitura)": (
+        "Você é um analista de dados especializado em processamento de textos históricos e teológicos. "
+        "Ignore métricas de infraestrutura. Foque exclusivamente em sintetizar, correlacionar e explicar os fragmentos "
+        "dos documentos bíblicos recuperados pelo RAG com base na pergunta do usuário. "
+        "Para cada fragmento analisado, você DEVE extrair e estruturar a resposta obrigatoriamente nestes tópicos: "
+        "1) ID/Dia da Leitura; 2) Características e Tom do Estudo; 3) Informações Diversas Extraídas do Texto. "
+        "Se a resposta não estiver estritamente nos dados recuperados, declare que a informação não consta na base."
+    )
+}
+with st.expander("🛠️ Personalizar Parâmetros do Agente (Ollama Options)"):
+    st.markdown("Ajuste o comportamento de amostragem e a personalidade do modelo local.")
+    
+    # Renderização do Dropbox para selecionar as mensagens predefinidas
+    prompt_key = st.selectbox(
+        "Mensagens Predefinidas (Templates de Prompt):",
+        options=list(SYSTEM_PROMPTS_POOL.keys()),
+        index=0,
+        help="Alterne rapidamente entre diferentes personas e regras de contenção do agente."
+    )
+    # Campo de texto populado dinamicamente com base no Dropbox
+    custom_system = st.text_area(
+        "System Prompt (Instrução do Sistema):",
+        value=SYSTEM_PROMPTS_POOL[prompt_key],
+        height=120,
+        help="Define a 'personalidade' e as regras de contenção do agente para evitar alucinações."
+    )
+    col_p1, col_p2, col_p3 = st.columns(3)
+    with col_p1:
+        temperature = st.slider(
+            "Temperatura", 
+            min_value=0.0, max_value=1.0, value=0.1, step=0.1,
+            help="Valores baixos (0.1) tornam o modelo determinístico e técnico. Valores altos trazem criatividade."
+        )
+    with col_p2:
+        top_k = st.slider(
+            "Top K", 
+            min_value=1, max_value=100, value=21, step=5,
+            help="Limita o vocabulário do modelo às K palavras mais prováveis."
+        )
+    with col_p3:
+        top_p = st.slider(
+            "Top P", 
+            min_value=0.0, max_value=1.0, value=0.5, step=0.05,
+            help="Amostragem de núcleo: controla a diversidade das respostas."
+        )
+    ollama_options = {
+        "temperature": temperature,
+        "top_k": top_k,
+        "top_p": top_p,
+        "system": custom_system
+    }
 user_input = st.text_input("Descreva o incidente ou peça uma análise:")
 if user_input:
     with st.spinner('Consultando base de conhecimento técnica...'):
         # 1. Busca no banco vetorial (ChromaDB)
         import predictive_agent_rag as rag
         contexto_recuperado = rag.get_context(user_input)
-        
         # 2. Envia para o Ollama com as métricas da tela
         metricas_atuais = f"Latência: 250ms, Erro: 2%"
-        resposta = rag.ask_ollama(metricas_atuais, contexto_recuperado, modelo_selecionado)
-        
+        resposta = rag.ask_ollama(
+            metricas_atuais, 
+            contexto_recuperado, 
+            modelo_selecionado, 
+            options=ollama_options
+        )
         st.write("### 📢 Insight do Engenheiro SRE:")
         st.info(resposta)
 # Tabela de logs do 'Cérebro' (CAMINHO DINÂMICO INTERNO DO DOCKER AJUSTADO)
 st.subheader("📂 Conhecimento Indexado (RAG Memory)")
 BASE_DIR_CONTAINER = os.path.dirname(os.path.abspath(__file__))
 caminho_brain = os.path.join(BASE_DIR_CONTAINER, "brain")
-
 if os.path.exists(caminho_brain):
     arquivos = [f for f in os.listdir(caminho_brain) if f.endswith('.md')]
     if arquivos:
@@ -193,17 +265,13 @@ import requests
 import os
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-
 OLLAMA_URL = "http://ollama-server:11434/api/generate"
-
 # Tentativa com caminho garantido pelo volume do Docker
 MODEL_PATH = "/app/aiops/ollama/models/all-MiniLM-L6-v2"
-
 embeddings = HuggingFaceEmbeddings(
     model_name=MODEL_PATH,
     model_kwargs={'device': 'cpu'}
 )
-
 def get_context(query):
     # Forçado caminho absoluto unificado com a raiz do volume montado
     db_path = "/app/aiops/ollama/vector_db"
@@ -212,26 +280,35 @@ def get_context(query):
         results = vector_db.similarity_search(query, k=2) # K reduzido para economizar processamento na CPU do Xeon
         return "\n".join([res.page_content for res in results])
     return "AVISO: O MANUAL TÉCNICO NÃO FOI ENCONTRADO NO DIRETÓRIO INTEGRADO!"
-
-def ask_ollama(metrics, context, question, model="tinyllama"):
-    system_instruction = (
-        "Você é o SRE CÓRTEX. Baseie-se APENAS no contexto fornecido. Se a resposta não estiver explicitamente no contexto, responda estritamente: 'Dados insuficientes no cérebro RAG'."
-    )
+def ask_ollama(metrics, context, question, model="tinyllama", options=None):
+    # Se o dashboard enviou um System Prompt personalizado, usa ele. Caso contrário, mantém o padrão rígido.
+    if options and options.get("system"):
+        system_instruction = options.get("system")
+    else:
+        system_instruction = (
+            "Você é o SRE CÓRTEX. Baseie-se APENAS no contexto fornecido. Se a resposta não estiver explicitamente no contexto, responda estritamente: 'Dados insuficientes no cérebro RAG'."
+        )
     full_prompt = f"{system_instruction}\nCONTEXTO: {context}\nMETRICAS: {metrics}\nPERGUNTA: {question}"
-    
+    # Monta a estrutura base das opções do Ollama, preservando o tuning de CPU do seu Xeon
+    ollama_options = {
+        "num_gpu": 0,          # Força a CPU no backend do Ollama
+        "num_thread": 6,       # Usa metade das threads do seu Xeon
+        "num_predict": 512     # Ajustado para respostas rápidas na CPU
+    }
+    # Injeta dinamicamente os parâmetros vindos dos sliders da tela (com fallbacks seguros)
+    if options:
+        ollama_options["temperature"] = options.get("temperature", 0.0)
+        ollama_options["top_k"] = options.get("top_k", 40)
+        ollama_options["top_p"] = options.get("top_p", 0.1)
+    else:
+        ollama_options["temperature"] = 0.0
+        ollama_options["top_p"] = 0.1
     payload = {
         "model": model,
         "prompt": full_prompt,
         "stream": False,
-        "options": {
-            "num_gpu": 0,          # Força a CPU no backend do Ollama
-            "num_thread": 6,       # Usa metade das threads do seu Xeon
-            "temperature": 0.0,    # 2. Mudado para 0.0 para eliminar a "criatividade" e focar em extração de dados
-            "top_p": 0.1,          # 3. Adicionado para limitar ainda mais as chances de alucinação
-            "num_predict": 512     # 4. Ajustado: 1024 tokens são aproximadamente ~750 palavras. Para respostas rápidas na CPU, 512 basta.
-        }
+        "options": ollama_options
     }
-    
     try:
         res = requests.post(OLLAMA_URL, json=payload, timeout=None)
         return res.json()['response']
@@ -246,16 +323,13 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import os
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-
 # Caminhos internos do container
 DB_PATH = "/app/aiops/ollama/vector_db"
 MODEL_PATH = "/app/aiops/ollama/models/all-MiniLM-L6-v2"
-
 embeddings = HuggingFaceEmbeddings(
     model_name=MODEL_PATH,
     model_kwargs={'device': 'cpu'}
 )
-
 def get_context(query):
     if os.path.exists(DB_PATH):
         try:
@@ -960,7 +1034,7 @@ chmod +x aiops/ollama/check_infra.sh
 #Córtex, Qual a base da arquitetura deste sistema e qual imagem Docker ele usa para o Java?
 #Córtex, quais bancos de dados o sistema usa?
 #Córtex, O sistema usa Docker e Python?, Qual a stack?
-#Córtex, quais os capítulos lidos no dia 3 ?
+#Quais os capítulos lidos no terceiro dia  ?
 #docker exec -it ai-agent pip install streamlit-autorefresh
 #FIND_LINKS=$(find ./cache_app/bin_pip -name "*.whl" -printf "--find-links=%h " | sort -u) && \
 #pip install --break-system-packages --no-index $FIND_LINKS -r requirements.txt

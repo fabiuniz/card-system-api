@@ -28,7 +28,7 @@ def get_gpu_metrics():
         util, used, total = [x.strip() for x in output.split(',')]
         # TRATAMENTO PARA GPU LEGADA: Se a carga vier "N/A", jogamos 0% ou "0" para não quebrar o int()
         if "N/A" in util:
-            gpu_load_display = "Disponível (Legacy)"
+            gpu_load_display = "Legacy "
             gpu_raw_load = 0
         else:
             gpu_load_display = f"{util}%"
@@ -40,6 +40,16 @@ def get_gpu_metrics():
         }
     except Exception:
         return {"load": "N/A", "vram": "N/A", "raw_load": 0}
+def get_cpu_fan_speed():
+    try:
+        # Tenta ler via lm-sensors
+        output = subprocess.check_output("sensors", shell=True).decode()
+        for line in output.split('\n'):
+            if 'fan' in line.lower() and 'RPM' in line:
+                return line.split(':')[1].strip()
+        return "N/A (LOCKED)"
+    except:
+        return "N/A"
 def get_cpu_temp_pro():
     try:
         # Caminho validado via 'x86_pkg_temp'
@@ -95,29 +105,25 @@ def get_gpu_info():
     return "Executando em CPU", "Modo Xeon (AVX2)"
 # --- FUNÇÃO DE CONTROLE DINÂMICO DE REFRIGERAÇÃO (CORRIGIDA) ---
 def set_gpu_fan_speed(speed_percent):
-    """
-    Controla o Fan dinamicamente de dentro do container apontando para o display virtual do host.
-    """
     try:
-        # Usamos o DISPLAY env e o comando que funcionou perfeitamente no seu teste de fogo
-        env_config = "export DISPLAY=:1; "
-        
+        # Comando unificado com export de ambiente para garantir
         if speed_percent == 0:
-            # Desativa o controle manual e volta para o automático do driver
-            cmd = f"{env_config} nvidia-settings -c :1 -a '[gpu:0]/GPUFanControlState=0'"
-            subprocess.run(cmd, shell=True, capture_output=True, timeout=5)
+            cmd = "export DISPLAY=:1; nvidia-settings -a '[gpu:0]/GPUFanControlState=0'"
         else:
-            # Ativa o modo manual e injeta a velocidade desejada
-            cmd_mode = f"{env_config} nvidia-settings -c :1 -a '[gpu:0]/GPUFanControlState=1'"
-            cmd_speed = f"{env_config} nvidia-settings -c :1 -a '[fan:0]/GPUTargetFanSpeed={speed_percent}'"
-            
-            subprocess.run(cmd_mode, shell=True, capture_output=True, timeout=5)
-            subprocess.run(cmd_speed, shell=True, capture_output=True, timeout=5)
+            cmd = f"export DISPLAY=:1; nvidia-settings -a '[gpu:0]/GPUFanControlState=1' -a '[fan:0]/GPUTargetFanSpeed={speed_percent}'"
+        
+        # Executa e captura erro para debug se necessário
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        # Se quiser debugar, descomente: 
+        # print(result.stderr) 
     except Exception as e:
-        pass
+        print(f"Erro no Fan Control: {e}")
 # --- Frame Sidebar ---
 @st.fragment
 def render_dynamic_sidebar():
+    freq = psutil.cpu_freq()
+    if freq:
+        st.write(f"**Clock Atual:** {freq.current:.0f} MHz")
     # O auto-refresh garante a atualização local dentro do fragmento
     st_autorefresh(interval=3000, limit=None, key="sidebar_refresh")
     # IMPORTANTE: Sem o prefixo 'st.sidebar.' aqui dentro!
@@ -146,34 +152,46 @@ def render_dynamic_sidebar():
     # Correção do Erro 2: Coletando os dados da GPU antes de renderizar na tela
     gpu_label, motor = get_gpu_info()
     st.metric("GPU Status", gpu_label, motor)
-    # Telemetria de Temperatura
-    st.header("🌡️ Telemetria")
+    # --- Consolidação de Coleta de Dados (Chama apenas uma vez por atualização) ---
     telemetria = get_temps()
-    col_temp1, col_temp2 = st.columns(2)
-    col_temp1.metric("Temp CPU", telemetria['cpu'])
-    col_temp2.metric("Temp GPU", telemetria['gpu'])
-    # Carga de CPU
-    cpu_usage = psutil.cpu_percent()
-    st.write(f"Carga CPU: {cpu_usage}%")
-    st.progress(cpu_usage / 100)
-    st.metric("Temp Real CPU", get_cpu_temp_pro())
-    # Métricas da GPU
     gpu_data = get_gpu_metrics()
-    col1, col2 = st.columns(2)
-    with col1:
+    cpu_usage = psutil.cpu_percent()
+    cpu_temp_real = get_cpu_temp_pro()
+    # cpu_fan = get_cpu_fan_speed() # Ative se a função estiver pronta
+    # --- Seção 1: Monitoramento Térmico & Ventoinhas ---
+    st.header("🌡️ Telemetria & Cooler")    
+    # 4 Colunas para um visual de "Dashboard Profissional"
+        # Carga de CPU com barra de progresso
+    st.write(f"**💻Uso do Xeon E5:** {cpu_usage}%")
+    st.progress(cpu_usage / 100)
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.metric("Temp CPU", cpu_temp_real)
+    with col_t2:
+        # Tenta exibir Cooler CPU, se falhar mostra N/A
+        try: st.metric("Cooler CPU", get_cpu_fan_speed())
+        except: st.metric("Cooler CPU", "N/A")
+    st.markdown("---")
+    # --- Seção 2: Carga de Processamento (Gráficos e Métricas) ---
+    # Métricas de GPU e VRAM em colunas
+    st.write(f"**📟Uso da GPU ({gpu_label}):** {gpu_data['load']}")
+    st.progress(gpu_data['raw_load'] / 100)
+    col_t1, col_t2 = st.columns(2)        
+    with col_t1:
+        st.metric("Temp GPU", telemetria['gpu'])
+    with col_t2:
+        st.metric("Cooler GPU", telemetria['gpu_fan'])
+    # Métricas de GPU e VRAM em colunas
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
         st.metric("Carga GPU", gpu_data['load'])
-    with col2:
-        st.metric("VRAM", gpu_data['vram'])
-    # Telemetria de Temperatura e Hardware
-    st.header("🌡️ Telemetria & Cooler")
-    telemetria = get_temps()
-    # 🟢 Dividido em 3 colunas para acomodar a Ventoinha de forma limpa
-    col_temp1, col_temp2, col_temp3 = st.columns(3)
-    col_temp1.metric("Temp CPU", telemetria['cpu'])
-    col_temp2.metric("Temp GPU", telemetria['gpu'])
-    col_temp3.metric("Cooler GPU", telemetria['gpu_fan']) # 🖥️ Exibe o Fan aqui!
-    if "1998MB" in gpu_data['vram'] and gpu_data['raw_load'] < 5:
-        st.warning("⚠️ VRAM Esgotada: O modelo está rodando na CPU!")
+    with col_g2:
+        # Se a VRAM estiver esgotada, o Streamlit destaca em vermelho automaticamente
+        st.metric("VRAM Usada", gpu_data['vram'])
+    # Alerta visual se a VRAM estiver crítica (Baseado no seu log de 8MB/1998MB)
+    if "1998MB" in gpu_data['vram'] or gpu_data['raw_load'] < 2:
+         if cpu_usage > 40: # Se CPU está alta e GPU baixa, confirma que fugiu para o Xeon
+            st.warning("⚠️ **VRAM Esgotada:** O processamento foi desviado para a CPU!")
 # --- Inicialização da Sidebar no Contexto Correto ---
 with st.sidebar:
     render_dynamic_sidebar()
@@ -195,6 +213,7 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Erro ao interromper processos: {e}")
         st.rerun()
+
 
 # --- Frame Main ---
 col1, col2, col3 = st.columns(3)
@@ -496,6 +515,7 @@ RUN apt-get update && apt-get install -y \\
     python3-dev \\
     gcc \\
     findutils \\
+    nvidia-settings \\
     && rm -rf /var/lib/apt/lists/*
 # 2. Copia requisitos
 COPY requirements.txt .
@@ -604,6 +624,7 @@ services:
     ports:
       - "8501:8501"
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw # Permite ao container falar com o Xvfb do host
       - /home/userlnx/docker/script_docker/card-system-api:/app
     deploy:
       resources:
@@ -1185,3 +1206,5 @@ chmod +x aiops/ollama/enable_auto_fans.sh
 #docker exec -it ollama-server ollama run qwen2:0.5b
 #DISPLAY=:1 nvidia-settings -a "[gpu:0]/GPUFanControlState=1"
 #DISPLAY=:1 nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=85"
+#sudo apt update && sudo apt install -y lm-sensors
+#sudo sensors-detect --auto

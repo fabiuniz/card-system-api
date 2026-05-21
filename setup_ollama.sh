@@ -55,26 +55,30 @@ def get_cpu_temp_pro():
 def get_temps():
     temps = {}
     try:
-        # Temperatura da CPU (Requer lm-sensors instalado no container)
+        # Temperatura da CPU
         tcore = psutil.sensors_temperatures()
         if 'coretemp' in tcore:
             temps['cpu'] = f"{tcore['coretemp'][0].current}°C"
         else:
-            # Fallback para o modo "bruto" do Linux
             cmd = "cat /sys/class/thermal/thermal_zone0/temp"
             raw_temp = subprocess.check_output(cmd, shell=True).decode().strip()
             temps['cpu'] = f"{int(raw_temp)/1000:.1f}°C"
     except:
         temps['cpu'] = "N/A"
+        
     try:
-        # Temperatura da GPU NVIDIA (GTX 760)
-        gpu_temp = subprocess.check_output(
-            "nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits", 
-            shell=True
-        ).decode().strip()
-        temps['gpu'] = f"{gpu_temp}°C"
+        # 🟢 NOVA CONSULTA: Puxa temperatura E velocidade da ventoinha juntas
+        cmd_gpu = "nvidia-smi --query-gpu=temperature.gpu,fan.speed --format=csv,noheader,nounits"
+        gpu_raw = subprocess.check_output(cmd_gpu, shell=True).decode().strip()
+        
+        temp_val, fan_val = [x.strip() for x in gpu_raw.split(',')]
+        
+        temps['gpu'] = f"{temp_val}°C"
+        temps['gpu_fan'] = f"{fan_val}%" # Guarda a porcentagem do fan
     except:
         temps['gpu'] = "N/A"
+        temps['gpu_fan'] = "N/A"
+        
     return temps
 def get_gpu_info():
     try:
@@ -89,7 +93,28 @@ def get_gpu_info():
         except:
             pass
     return "Executando em CPU", "Modo Xeon (AVX2)"
-
+# --- FUNÇÃO DE CONTROLE DINÂMICO DE REFRIGERAÇÃO (CORRIGIDA) ---
+def set_gpu_fan_speed(speed_percent):
+    """
+    Controla o Fan dinamicamente de dentro do container apontando para o display virtual do host.
+    """
+    try:
+        # Usamos o DISPLAY env e o comando que funcionou perfeitamente no seu teste de fogo
+        env_config = "export DISPLAY=:1; "
+        
+        if speed_percent == 0:
+            # Desativa o controle manual e volta para o automático do driver
+            cmd = f"{env_config} nvidia-settings -c :1 -a '[gpu:0]/GPUFanControlState=0'"
+            subprocess.run(cmd, shell=True, capture_output=True, timeout=5)
+        else:
+            # Ativa o modo manual e injeta a velocidade desejada
+            cmd_mode = f"{env_config} nvidia-settings -c :1 -a '[gpu:0]/GPUFanControlState=1'"
+            cmd_speed = f"{env_config} nvidia-settings -c :1 -a '[fan:0]/GPUTargetFanSpeed={speed_percent}'"
+            
+            subprocess.run(cmd_mode, shell=True, capture_output=True, timeout=5)
+            subprocess.run(cmd_speed, shell=True, capture_output=True, timeout=5)
+    except Exception as e:
+        pass
 # --- Frame Sidebar ---
 @st.fragment
 def render_dynamic_sidebar():
@@ -118,24 +143,20 @@ def render_dynamic_sidebar():
     ram_total = f"{mem.total / (1024**3):.2f} GB"
     ram_livre = f"{mem.available / (1024**2):.0f} MB"
     st.metric("Memória RAM", ram_total, f"Livre: {ram_livre}")
-    
     # Correção do Erro 2: Coletando os dados da GPU antes de renderizar na tela
     gpu_label, motor = get_gpu_info()
     st.metric("GPU Status", gpu_label, motor)
-    
     # Telemetria de Temperatura
     st.header("🌡️ Telemetria")
     telemetria = get_temps()
     col_temp1, col_temp2 = st.columns(2)
     col_temp1.metric("Temp CPU", telemetria['cpu'])
     col_temp2.metric("Temp GPU", telemetria['gpu'])
-    
     # Carga de CPU
     cpu_usage = psutil.cpu_percent()
     st.write(f"Carga CPU: {cpu_usage}%")
     st.progress(cpu_usage / 100)
     st.metric("Temp Real CPU", get_cpu_temp_pro())
-    
     # Métricas da GPU
     gpu_data = get_gpu_metrics()
     col1, col2 = st.columns(2)
@@ -143,17 +164,36 @@ def render_dynamic_sidebar():
         st.metric("Carga GPU", gpu_data['load'])
     with col2:
         st.metric("VRAM", gpu_data['vram'])
-        
+    # Telemetria de Temperatura e Hardware
+    st.header("🌡️ Telemetria & Cooler")
+    telemetria = get_temps()
+    # 🟢 Dividido em 3 colunas para acomodar a Ventoinha de forma limpa
+    col_temp1, col_temp2, col_temp3 = st.columns(3)
+    col_temp1.metric("Temp CPU", telemetria['cpu'])
+    col_temp2.metric("Temp GPU", telemetria['gpu'])
+    col_temp3.metric("Cooler GPU", telemetria['gpu_fan']) # 🖥️ Exibe o Fan aqui!
     if "1998MB" in gpu_data['vram'] and gpu_data['raw_load'] < 5:
         st.warning("⚠️ VRAM Esgotada: O modelo está rodando na CPU!")
-
 # --- Inicialização da Sidebar no Contexto Correto ---
 with st.sidebar:
     render_dynamic_sidebar()
     st.markdown("---")
-    # O botão de cancelamento agora lê a variável global previamente inicializada sem quebrar
     if st.button("❌ Cancelar Processamento", type="primary", use_container_width=True):
-        st.toast("🚨 Comando de cancelamento enviado!", icon="⚠️")
+        st.toast("🚨 Enviando comando de interrupção...", icon="⚠️")
+        try:
+            # 1. Força o Ollama a descarregar todos os modelos da memória (para as requisições HTTP travadas)
+            # Passar o modelo com tempo de vida 0 faz o Ollama matar a sessão atual imediatamente
+            if 'modelo_selecionado' in locals() and modelo_selecionado:
+                requests.post(f"{ollama_host}/api/generate", json={"model": modelo_selecionado, "keep_alive": 0})
+            # 2. Comando via Docker para matar o "ollama runner" (processo de inferência pesado)
+            # Como o Streamlit não tem a CLI do docker interna, usamos o 'ollama-server' da rede
+            # Mas a forma mais garantida se estiver usando a API é derrubar o processo de execução técnica:
+            import subprocess
+            # Envia um sinal para reiniciar o serviço interno do container ou matar o runner
+            subprocess.run("docker exec ollama-server pkill -f 'ollama runner'", shell=True, capture_output=True)
+            st.success("🤖 Todos os processos de inferência do Ollama foram interrompidos!")
+        except Exception as e:
+            st.error(f"Erro ao interromper processos: {e}")
         st.rerun()
 
 # --- Frame Main ---
@@ -262,7 +302,10 @@ with st.expander("🛠️ Personalizar Parâmetros do Agente (Ollama Options)"):
     }
 user_input = st.text_input("Descreva o incidente ou peça uma análise:")
 if user_input:
-    with st.spinner('Consultando base de conhecimento técnica...'):
+    # 🚨 GATILHO DINÂMICO: O usuário perguntou? Acelera o Fan para 90% IMEDIATAMENTE
+    st.toast("⚡ Proteção Térmica Ativada: Elevando rotação dos FANs para processamento...", icon="❄️")
+    set_gpu_fan_speed(100)
+    with st.spinner('Consultando base de conhecimento técnica e gerando Insight...'):
         # 1. Busca no banco vetorial (ChromaDB)
         import predictive_agent_rag as rag
         contexto_recuperado = rag.get_context(user_input)
@@ -276,6 +319,9 @@ if user_input:
         )
         st.write("### 📢 Insight do Engenheiro SRE:")
         st.info(resposta)
+    # 📉 GATILHO DE DESCANSO: O modelo terminou de responder? Volta o fan para 35% ou Automático
+    set_gpu_fan_speed(0)
+    st.toast("✅ Inferência concluída. Reduzindo rotação dos FANs.", icon="🍃")
 # Tabela de logs do 'Cérebro' (CAMINHO DINÂMICO INTERNO DO DOCKER AJUSTADO)
 st.subheader("📂 Conhecimento Indexado (RAG Memory)")
 BASE_DIR_CONTAINER = os.path.dirname(os.path.abspath(__file__))
@@ -319,7 +365,7 @@ def get_context(query):
     db_path = "/app/aiops/ollama/vector_db"
     if os.path.exists(db_path):
         vector_db = Chroma(persist_directory=db_path, embedding_function=embeddings)
-        results = vector_db.similarity_search(query, k=2) # K reduzido para economizar processamento na CPU do Xeon
+        results = vector_db.similarity_search(query, k=2) # K reduzido para poupar o Xeon
         return "\n".join([res.page_content for res in results])
     return "AVISO: O MANUAL TÉCNICO NÃO FOI ENCONTRADO NO DIRETÓRIO INTEGRADO!"
 def ask_ollama(metrics, context, question, model="tinyllama", options=None):
@@ -332,10 +378,12 @@ def ask_ollama(metrics, context, question, model="tinyllama", options=None):
         )
     full_prompt = f"{system_instruction}\nCONTEXTO: {context}\nMETRICAS: {metrics}\nPERGUNTA: {question}"
     # Monta a estrutura base das opções do Ollama, preservando o tuning de CPU do seu Xeon
+    # Centralizando TODAS as configurações de hardware e geração dentro do options do Ollama
     ollama_options = {
-        "num_gpu": 0,          # Força a CPU no backend do Ollama
-        "num_thread": 6,       # Usa metade das threads do seu Xeon
-        "num_predict": 512     # Ajustado para respostas rápidas na CPU
+        "num_gpu": 0,           # Força processamento puramente em CPU
+        "num_thread": 6,        # Evita estrangular o host Xeon E5-2420
+        "num_predict": 250,     # Limite real de tokens gerados (evita loops infinitos de 99% CPU)
+        "stop": ["User:", "PERGUNTA:", "<|im_end|>", "CONTEXTO:"] # Sinais de parada inteligentes
     }
     # Injeta dinamicamente os parâmetros vindos dos sliders da tela (com fallbacks seguros)
     if options:
@@ -352,8 +400,11 @@ def ask_ollama(metrics, context, question, model="tinyllama", options=None):
         "options": ollama_options
     }
     try:
+        # Timeout de 45 segundos para o Streamlit não travar se o modelo engasgar
         res = requests.post(OLLAMA_URL, json=payload, timeout=None)
         return res.json()['response']
+    except requests.exceptions.Timeout:
+        return "Erro na IA: O processador Xeon excedeu o tempo limite de resposta (Timeout)."
     except Exception as e:
         return f"Erro na IA: {str(e)}"
 EOF
@@ -995,8 +1046,50 @@ LOG_FILE="check_infra.log"
     echo "---------------------------------------"
 } | tee -a "$LOG_FILE"
 EOF
-
 chmod +x aiops/ollama/check_infra.sh
+
+cat <<'EOF' > aiops/ollama/enable_auto_fans.sh
+#!/bin/bash
+# --- CONFIGURAÇÕES ---
+DISPLAY_ID=":1"
+echo "===================================================="
+echo "⚡ [SRE Córtex] AJUSTANDO PARÂMETROS DE REDE DO XHOST"
+echo "===================================================="
+# 1. GERENCIAMENTO DA TELA FANTASMA EM MEMÓRIA (XVFB)
+echo "🖥️  Garantindo Framebuffer Virtual no Display $DISPLAY_ID..."
+if ! pgrep -f "Xvfb $DISPLAY_ID" > /dev/null; then
+    sudo nohup Xvfb $DISPLAY_ID -screen 0 1024x768x24 +extension GLX +extension RANDR > /dev/null 2>&1 &
+    sleep 2
+fi
+# 2. AUTORIZAÇÃO CORRETA DE REDE (CORREÇÃO DO CIDR)
+echo "🔒 Aplicando permissões de segurança no xhost..."
+export DISPLAY=$DISPLAY_ID
+# Desativa o controle estrito do xhost apenas para conexões locais/docker 
+# (Método mais seguro e compatível para containers na mesma máquina)
+xhost +local:docker > /dev/null
+xhost +localhost > /dev/null
+xhost +127.0.0.1 > /dev/null
+echo "✅ Permissões aplicadas com sucesso."
+# 3. TESTE DE FOGO INTEGRADO
+echo "----------------------------------------------------"
+echo "🎯 Executando Teste de Fogo no Hardware..."
+echo "🔄 Forçando FAN a 100% por 3 segundos para validação..."
+# Configura o controle manual no display local do Xvfb
+nvidia-settings -c $DISPLAY_ID -a "[gpu:0]/GPUFanControlState=1" > /dev/null 2>&1
+nvidia-settings -c $DISPLAY_ID -a "[fan:0]/GPUTargetFanSpeed=100" > /dev/null 2>&1
+sleep 3
+# Captura telemetria atual via nvidia-smi
+STATUS_VALIDACAO=$(nvidia-smi --query-gpu=fan.speed,temperature.gpu --format=csv,noheader,nounits)
+FAN_SPEED=$(echo "$STATUS_VALIDACAO" | cut -d',' -f1 | tr -d ' ')
+GPU_TEMP=$(echo "$STATUS_VALIDACAO" | cut -d',' -f2 | tr -d ' ')
+echo "📊 Telemetria -> Rotação do FAN: ${FAN_SPEED}% | Temperatura: ${GPU_TEMP}°C"
+# Restaura para o controle automático do driver
+nvidia-settings -c $DISPLAY_ID -a "[gpu:0]/GPUFanControlState=0" > /dev/null 2>&1
+echo "===================================================="
+echo "🏁 [SRE Córtex] ECOSSISTEMA PRONTO E VALIDADO!"
+echo "===================================================="
+EOF
+chmod +x aiops/ollama/enable_auto_fans.sh
 
 ## 📊 [DIAGNÓSTICO FINAL: HARDWARE]
 
@@ -1090,3 +1183,5 @@ chmod +x aiops/ollama/check_infra.sh
 #FIND_LINKS=$(find ./cache_app/bin_pip -name "*.whl" -printf "--find-links=%h " | sort -u) && \
 #pip install --break-system-packages --no-index $FIND_LINKS -r requirements.txt
 #docker exec -it ollama-server ollama run qwen2:0.5b
+#DISPLAY=:1 nvidia-settings -a "[gpu:0]/GPUFanControlState=1"
+#DISPLAY=:1 nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=85"

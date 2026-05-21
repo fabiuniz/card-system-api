@@ -42,13 +42,29 @@ def get_gpu_metrics():
         return {"load": "N/A", "vram": "N/A", "raw_load": 0}
 def get_cpu_fan_speed():
     try:
-        # Tenta ler via lm-sensors
-        output = subprocess.check_output("sensors", shell=True).decode()
-        for line in output.split('\n'):
-            if 'fan' in line.lower() and 'RPM' in line:
-                return line.split(':')[1].strip()
-        return "N/A (LOCKED)"
-    except:
+        import glob
+        # Busca direta no sistema de arquivos do Linux (/sys/class/hwmon)
+        # Varre todos os inputs de fans ativos (fan1_input, fan2_input, etc.)
+        fan_inputs = glob.glob("/sys/class/hwmon/hwmon*/fan*_input")
+        for path in fan_inputs:
+            with open(path, "r") as f:
+                rpm_raw = f.read().strip()
+                if rpm_raw.isdigit():
+                    rpm = int(rpm_raw)
+                    # Como o seu fan está no canal 'fan2' a 2280 RPM,
+                    # qualquer valor real maior que zero será capturado aqui.
+                    if rpm > 0:
+                        return f"{rpm} RPM"
+        # Fallback para o psutil caso o mapeamento direto falhe por permissão
+        import psutil
+        fans = psutil.sensors_fans()
+        if fans:
+            for name, entries in fans.items():
+                for entry in entries:
+                    if entry.current > 0:
+                        return f"{entry.current} RPM"
+        return "N/A"
+    except Exception as e:
         return "N/A"
 def get_cpu_temp_pro():
     try:
@@ -75,20 +91,16 @@ def get_temps():
             temps['cpu'] = f"{int(raw_temp)/1000:.1f}°C"
     except:
         temps['cpu'] = "N/A"
-        
     try:
         # 🟢 NOVA CONSULTA: Puxa temperatura E velocidade da ventoinha juntas
         cmd_gpu = "nvidia-smi --query-gpu=temperature.gpu,fan.speed --format=csv,noheader,nounits"
         gpu_raw = subprocess.check_output(cmd_gpu, shell=True).decode().strip()
-        
         temp_val, fan_val = [x.strip() for x in gpu_raw.split(',')]
-        
         temps['gpu'] = f"{temp_val}°C"
         temps['gpu_fan'] = f"{fan_val}%" # Guarda a porcentagem do fan
     except:
         temps['gpu'] = "N/A"
         temps['gpu_fan'] = "N/A"
-        
     return temps
 def get_gpu_info():
     try:
@@ -626,6 +638,7 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw # Permite ao container falar com o Xvfb do host
       - /home/userlnx/docker/script_docker/card-system-api:/app
+      - /sys/class/hwmon:/sys/class/hwmon:ro
     deploy:
       resources:
         limits:

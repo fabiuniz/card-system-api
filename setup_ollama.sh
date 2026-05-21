@@ -3,11 +3,7 @@
 clear
 mkdir -p aiops/ollama
 echo "🤖 [SRE Córtex] Iniciando instalação da IA Preditiva ..."
-
-# 1. CRIANDO ESTRUTURA DE DIRETÓRIOS
-
-
-# 2. GERANDO O AGENTE PREDITIVO (Python + LangChain + RAG)
+# 1. GERANDO O AGENTE PREDITIVO (Python + LangChain + RAG)
 cat <<EOF > aiops/ollama/dashboard.py
 import streamlit as st
 import requests
@@ -99,7 +95,6 @@ def get_gpu_info():
 def render_dynamic_sidebar():
     # O auto-refresh garante a atualização local dentro do fragmento
     st_autorefresh(interval=3000, limit=None, key="sidebar_refresh")
-    
     # IMPORTANTE: Sem o prefixo 'st.sidebar.' aqui dentro!
     st.header("📡 Status da Infra Local")
     
@@ -113,7 +108,7 @@ def render_dynamic_sidebar():
             return platform.processor()
             
     cpu_model = get_detailed_cpu()
-    
+    #CPU
     st.subheader("💻 Processador")
     st.info(f"{cpu_model}")
     st.write(f"**Threads:** {os.cpu_count()} | **Arquitetura:** {platform.machine()}")
@@ -155,6 +150,11 @@ def render_dynamic_sidebar():
 # --- Inicialização da Sidebar no Contexto Correto ---
 with st.sidebar:
     render_dynamic_sidebar()
+    st.markdown("---")
+    # O botão de cancelamento agora lê a variável global previamente inicializada sem quebrar
+    if st.button("❌ Cancelar Processamento", type="primary", use_container_width=True):
+        st.toast("🚨 Comando de cancelamento enviado!", icon="⚠️")
+        st.rerun()
 
 # --- Frame Main ---
 col1, col2, col3 = st.columns(3)
@@ -298,7 +298,7 @@ else:
     st.write("Nenhum conhecimento extra indexado ainda.")
 EOF
 
-# Indexa os manuais iniciais do banco de dados vetorial.
+# 2. Indexa os manuais iniciais do banco de dados vetorial.
 cat <<'EOF' > aiops/ollama/predictive_agent_rag.py
 __import__('pysqlite3')
 import sys
@@ -357,7 +357,7 @@ def ask_ollama(metrics, context, question, model="tinyllama", options=None):
     except Exception as e:
         return f"Erro na IA: {str(e)}"
 EOF
-
+# 3. 
 cat <<'EOF' > aiops/ollama/chroma_manager.py
 __import__('pysqlite3')
 import sys
@@ -383,7 +383,7 @@ def get_context(query):
     return "AVISO: Banco de dados vetorial não encontrado!"
 EOF
 
-# 3. GERANDO O SCRIPT DE RE-INDEXAÇÃO (Afinamento)
+# 4. GERANDO O SCRIPT DE RE-INDEXAÇÃO (Afinamento)
 cat <<'EOF' > aiops/ollama/reindex_brain.py
 __import__('pysqlite3')
 import sys
@@ -419,7 +419,7 @@ else:
     print("⚠️ Pasta 'brain' vazia ou sem arquivos .md válidos para indexação.")
 EOF
 
-# 4. GERANDO O DOCKERFILE DO AGENTE
+# 5. GERANDO O DOCKERFILE DO AGENTE
 cat <<EOF > aiops/ollama/requirements.txt
 requests
 streamlit
@@ -435,6 +435,7 @@ streamlit-autorefresh
 ollama
 EOF
 
+# 6.
 cat <<EOF > aiops/ollama/Dockerfile.ai
 FROM python:3.9-slim
 WORKDIR /app
@@ -458,7 +459,7 @@ RUN --mount=type=bind,source=pip_cache,target=/app/pip_cache \
 COPY . .
 CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
 EOF
-
+# 7.
 cat <<EOF > .dockerignore
 ollama_data/
 vector_db/
@@ -466,7 +467,7 @@ brain/
 *.tar
 EOF
 
-# GERANDO O DOCKER-COMPOSE OTIMIZADO PARA AMD RX 580
+# 8. GERANDO O DOCKER-COMPOSE OTIMIZADO PARA AMD RX 580
 cat <<EOF > aiops/ollama/docker-compose_rx580.yml
 services:
   ollama-server:
@@ -509,7 +510,7 @@ services:
       - "/dev/dri:/dev/dri"
 EOF
 
-# 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE) #latest # 0.1.32 #0.17.4 #0.1.32
+# 9. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE) #latest # 0.1.32 #0.17.4 #0.1.32
 cat <<EOF > aiops/ollama/docker-compose_gtx760.yml
 version: '3'
 services:
@@ -542,8 +543,9 @@ services:
     pull_policy: never
     working_dir: /app
     environment:
-      - OLLAMA_CUDA_MIN_COMPUTE_CAPABILITY=3.5
+      - OLLAMA_CUDA_MIN_COMPUTE_CAPABILITY=3.0
       - OLLAMA_URL=http://ollama-server:11434/api/generate
+      - OLLAMA_NOPRUNE=1
       - PYTHONUNBUFFERED=1
     entrypoint: ["streamlit", "run", "aiops/ollama/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
     depends_on:
@@ -564,7 +566,7 @@ services:
               capabilities: [gpu, utility]
 EOF
 
-# 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
+# 10. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
 cat <<EOF > aiops/ollama/docker-compose_cpu.yml
 version: '3'
 services:
@@ -669,7 +671,7 @@ echo "--------------------------------------------------------"
 echo "🌐 Dashboard disponível em: http://localhost:8501"
 echo "--------------------------------------------------------"
 
-# Passo 1: Preparação do Windows (Lado de Fora) Ele vai ativar o WSL e instalar o Debian
+# 11: Preparação do Windows (Lado de Fora) Ele vai ativar o WSL e instalar o Debian
 # ------------------------------------------------------------------------------------
 cat <<'EOF' > aiops/ollama/prepare_ia.ps1
 # 1. Habilitar Recursos do Windows
@@ -694,7 +696,7 @@ netsh interface portproxy reset
 wsl --update
 EOF
 
-# Passo 2: Preparação do Linux e Drivers (Dentro do WSL/Debian)
+# 12: Preparação do Linux e Drivers (Dentro do WSL/Debian)
 # ------------------------------------------------------------------------------------
 # Este é o seu "orquestrador". Ele vai baixar as imagens Docker, montar os discos e clonar o projeto
 cat <<'EOF' > aiops/ollama/setup_ia.sh
@@ -762,7 +764,7 @@ echo "--------------------------------------------------------"
 EOF
 chmod +x aiops/ollama/setup_ia.sh
 
-# Prepara o sistema e o Docker para suportar a NVIDIA Legacy
+# 13. Prepara o sistema e o Docker para suportar a NVIDIA Legacy
 cat <<'EOF' > aiops/ollama/setup_nvidia.sh
 #!/bin/bash
 GREEN='\033[0;32m'
@@ -806,7 +808,7 @@ EOF
 chmod +x aiops/ollama/setup_nvidia.sh
 
 # Ele vai instalar o Toolkit da RX 580 no Debian para o Docker
-# Script de Setup para GPU AMD (RX 580) no Debian/WSL
+# 14. Script de Setup para GPU AMD (RX 580) no Debian/WSL
 cat <<'EOF' > aiops/ollama/setup_amd.sh
 #!/bin/bash
 GREEN='\033[0;32m'
@@ -829,7 +831,7 @@ docker-compose -f docker-compose_rx580.yml up -d
 echo -e "${GREEN}✅ RX 580 Ativada! Verifique com: docker logs ollama-server${NC}"
 EOF
 chmod +x aiops/ollama/setup_amd.sh
-# Rodar logo após o setup da NVIDIA. Ele garante que, se a GTX 760 falhar por ser antiga, o Docker use o modo "runc" estável para o Xeon não travar.
+# 15. Rodar logo após o setup da NVIDIA. Ele garante que, se a GTX 760 falhar por ser antiga, o Docker use o modo "runc" estável para o Xeon não travar.
 cat <<'EOF' > aiops/ollama/setup_AVX.sh
 # --- AJUSTE DE SEGURANÇA: RESET DO RUNTIME ---
 # Remove a tentativa do Docker de usar a GPU Kepler que falhou no NVML
@@ -843,10 +845,8 @@ fi
 EOF
 chmod +x aiops/ollama/setup_AVX.sh
 
-
-# Passo 3: Inicialização dos Serviços
 # # ------------------------------------------------------------------------------------
-# Este script vai dar o docker-compose up -d e fazer o pull dos modelos (TinyLlama, Phi3).
+# 16. Este script vai dar o docker-compose up -d e fazer o pull dos modelos (TinyLlama, Phi3).
 cat <<EOF > aiops/ollama/cfg_service.sh
 #Antes de rodar abra o PowerShell como Administrador.
 #Copie e cole os comandos:
@@ -891,7 +891,7 @@ echo "🚀 Execultado biblioteca de modelos para o Córtex..."
 EOF
 chmod +x aiops/ollama/cfg_service.sh
 
-# Passo 4: Alimentação e Validação
+# 17 . Alimentação e Validação
 cat <<'EOF' > aiops/ollama/clear_knowledge.sh
 #!/bin/bash
 BASE_DIR=$(dirname "$(readlink -f "$0")")
@@ -920,7 +920,7 @@ chmod +x aiops/ollama/clear_knowledge.sh
 chmod +x aiops/ollama/clear_knowledge.sh
 
 # ------------------------------------------------------------------------------------
-# Use para adicionar qualquer regra específica que foi passada.
+# 18. Use para adicionar qualquer regra específica que foi passada.
 cat <<'EOF' > aiops/ollama/add_knowledge.sh
 #!/bin/bash
 # Define o caminho absoluto baseado na localização do script no Host
@@ -944,7 +944,7 @@ echo "✅ IA atualizada!"
 EOF
 chmod +x aiops/ollama/add_knowledge.sh
 
-# Execute este por último para ver o relatório final e garantir que a RAM e a CPU estão aguentando o tranco.
+# 19. Execute este por último para ver o relatório final e garantir que a RAM e a CPU estão aguentando o tranco.
 cat <<'EOF' > aiops/ollama/check_infra.sh
 #!/bin/bash
 LOG_FILE="check_infra.log"

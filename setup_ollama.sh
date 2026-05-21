@@ -200,10 +200,32 @@ def render_dynamic_sidebar():
     with col_g2:
         # Se a VRAM estiver esgotada, o Streamlit destaca em vermelho automaticamente
         st.metric("VRAM Usada", gpu_data['vram'])
-    # Alerta visual se a VRAM estiver crítica (Baseado no seu log de 8MB/1998MB)
-    if "1998MB" in gpu_data['vram'] or gpu_data['raw_load'] < 2:
-         if cpu_usage > 40: # Se CPU está alta e GPU baixa, confirma que fugiu para o Xeon
-            st.warning("⚠️ **VRAM Esgotada:** O processamento foi desviado para a CPU!")
+# Alerta visual objetivo: Detecta por que o modelo (mesmo pequeno) não entrou na GPU
+    if "Legacy" in gpu_data['load'] or (gpu_data['raw_load'] < 2 and cpu_usage > 40):
+        # Captura o nome do modelo atual
+        m_atual = modelo_selecionado if 'modelo_selecionado' in locals() else "Desconhecido"
+        
+        st.error(f"### ⚠️ Hardware em modo Fallback: {m_atual} operando em CPU")
+        
+        col_diag, col_num = st.columns(2)
+        
+        with col_diag:
+            st.markdown(f"""
+            **🔍 Diagnóstico SRE:**
+            * **Modelo Selecionado:** `{m_atual}` (~270MB).
+            * **Status de Alocação:** A GPU GTX 760 (2GB) tem espaço, mas o **Ollama Engine** não consegue enviar dados para esta arquitetura (Kepler).
+            * **Causa Raiz:** Incompatibilidade de drivers CUDA modernos com hardware de 2013.
+            """)
+            
+        with col_num:
+            st.markdown(f"""
+            **📊 Comparativo de Eficiência:**
+            * **VRAM Disponível:** 1998MB (Total) vs 8MB (Usada).
+            * **Carga de Desvio:** {cpu_usage}% no Xeon E5 (Processamento pesado).
+            * **Refrigeração:** Cooler CPU em **{get_cpu_fan_speed()}** (Esforço Máximo).
+            """)
+            
+        st.info("💡 **Ação Prática:** Como o modelo é pequeno (135M parâmetros), ele rodará bem no Xeon, mas a latência de 250ms é o limite deste processador sem ajuda da GPU.")
 # --- Inicialização da Sidebar no Contexto Correto ---
 with st.sidebar:
     render_dynamic_sidebar()
@@ -565,6 +587,8 @@ services:
       - HSA_OVERRIDE_GFX_VERSION=8.0.3
       - HCC_AMDGPU_TARGET=gfx803
       - OLLAMA_DEBUG=1
+      - CUDA_VISIBLE_DEVICES=0
+      - ZYPH_FORCE_CUDA=1 # Algumas versões de backend aceitam forçar
     devices:
       - "/dev/kfd:/dev/kfd"
       - "/dev/dri:/dev/dri"

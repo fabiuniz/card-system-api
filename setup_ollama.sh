@@ -16,6 +16,7 @@ import platform
 import psutil
 import os
 import subprocess
+import ollama
 from streamlit_autorefresh import st_autorefresh
 os.environ['TRANSFORMERS_OFFLINE'] = "1"
 os.environ['HF_DATASETS_OFFLINE'] = "1"
@@ -23,18 +24,25 @@ st.set_page_config(page_title="SRE Córtex", layout="wide")
 st.title("🤖 SRE Córtex - Painel Preditivo")
 def get_gpu_metrics():
     try:
-        # Consulta carga (utilization) e memória usada/total
+        # Consulta carga (utilization), memória usada e total
         cmd = "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits"
         output = subprocess.check_output(cmd, shell=True).decode().strip()
         if not output: return {"load": "N/A", "vram": "N/A", "raw_load": 0}
-        # Exemplo de saída: "15, 450, 1998" (Carga %, Mem Usada, Mem Total)
-        util, used, total = output.split(', ')
+        # Faz o split dos valores limpos
+        util, used, total = [x.strip() for x in output.split(',')]
+        # TRATAMENTO PARA GPU LEGADA: Se a carga vier "N/A", jogamos 0% ou "0" para não quebrar o int()
+        if "N/A" in util:
+            gpu_load_display = "Disponível (Legacy)"
+            gpu_raw_load = 0
+        else:
+            gpu_load_display = f"{util}%"
+            gpu_raw_load = int(util)
         return {
-            "load": f"{util}%",
+            "load": gpu_load_display,
             "vram": f"{used}MB / {total}MB",
-            "raw_load": int(util)
+            "raw_load": gpu_raw_load
         }
-    except:
+    except Exception:
         return {"load": "N/A", "vram": "N/A", "raw_load": 0}
 def get_cpu_temp_pro():
     try:
@@ -157,13 +165,31 @@ col3.metric("Status do Modelo", "Ollama Engine", "Online")
 st.subheader("🧠 Consulta ao Agente RAG")
 #Personalizar Parâmetros
 col_mod1, col_mod2 = st.columns([2, 3])
+# 1. Configura o cliente para apontar para o container do Ollama na rede do Docker
+# Se você não definiu a variável de ambiente OLLAMA_HOST, ele tentará usar o nome padrão do container
+ollama_host = os.environ.get("OLLAMA_HOST", "http://ollama-server:11434")
+client = ollama.Client(host=ollama_host)
+
+# 2. Busca os modelos disponíveis usando o cliente configurado
+try:
+    model_list_response = client.list()
+    modelos_disponiveis = [model['model'] for model in model_list_response['models']]
+except Exception as e:
+    modelos_disponiveis = []
+    st.error(f"Erro ao conectar com o Ollama no endereço ({ollama_host}): {e}")
+
+# 3. Renderiza o selectbox dinamicamente
 with col_mod1:
-    modelo_selecionado = st.selectbox(
-        "Escolha o Modelo de Análise:",
-        ["tinyllama", "phi3:mini", "llama3:8b-instruct-q4_0"],
-        index=0,
-        help="Phi3: Rápido (GPU/CPU). Llama3: Completo (Exige o Xeon). TinyLlama: Para análises leves."
-    )
+    if modelos_disponiveis:
+        modelo_selecionado = st.selectbox(
+            "Escolha o Modelo de Análise:",
+            options=modelos_disponiveis,
+            index=0,
+            help="Modelos carregados dinamicamente do seu Ollama local."
+        )
+    else:
+        st.warning("Nenhum modelo encontrado. Certifique-se de que o Ollama possui modelos baixados (ollama pull).")
+        modelo_selecionado = None
 # --- ⚙️ Dicionário de Mensagens Predefinidas (Dropbox) ---
 SYSTEM_PROMPTS_POOL = {
     "Padrão (IAOps & Infra)": (
@@ -406,6 +432,7 @@ chromadb
 sentence-transformers
 pysqlite3-binary
 streamlit-autorefresh
+ollama
 EOF
 
 cat <<EOF > aiops/ollama/Dockerfile.ai
@@ -515,6 +542,7 @@ services:
     pull_policy: never
     working_dir: /app
     environment:
+      - OLLAMA_CUDA_MIN_COMPUTE_CAPABILITY=3.5
       - OLLAMA_URL=http://ollama-server:11434/api/generate
       - PYTHONUNBUFFERED=1
     entrypoint: ["streamlit", "run", "aiops/ollama/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
@@ -529,6 +557,11 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, utility]
 EOF
 
 # 6. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
@@ -1056,3 +1089,4 @@ chmod +x aiops/ollama/check_infra.sh
 #docker commit ai-agent ollama-ai-agent:v1.0-gold
 #FIND_LINKS=$(find ./cache_app/bin_pip -name "*.whl" -printf "--find-links=%h " | sort -u) && \
 #pip install --break-system-packages --no-index $FIND_LINKS -r requirements.txt
+#docker exec -it ollama-server ollama run qwen2:0.5b

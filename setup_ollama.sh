@@ -33,7 +33,7 @@ def get_gpu_metrics():
         else:
             gpu_load_display = f"{util}%"
             gpu_raw_load = int(util)
-        return {
+        return {fecho '    nome_base=$(basename "$arquivo" .vtt)'
             "load": gpu_load_display,
             "vram": f"{used}MB / {total}MB",
             "raw_load": gpu_raw_load
@@ -525,51 +525,79 @@ EOF
 
 # 5. GERANDO O DOCKERFILE DO AGENTE
 cat <<EOF > aiops/ollama/requirements.txt
-requests
-streamlit
+
+
 pandas
 psutil
 prometheus-api-client
 langchain
 langchain-community
-chromadb
+
 sentence-transformers
 pysqlite3-binary
 streamlit-autorefresh
-ollama
+
 EOF
 
 # 6.
 cat <<EOF > aiops/ollama/Dockerfile.ai
-FROM python:3.9-slim
+# 1. Define a imagem base oficial do Python (versão leve/slim)
+FROM python:3.11-slim
+# 2. Define o diretório de trabalho padrão dentro do container
 WORKDIR /app
-# 1. Instala dependências e o 'findutils' completo
+# 3. Instala dependências e o 'findutils' completo
 RUN apt-get update && apt-get install -y \\
     build-essential \\
     python3-dev \\
     gcc \\
     findutils \\
-    nvidia-settings \\
     && rm -rf /var/lib/apt/lists/*
-# 2. Copia requisitos
+# 4. Copia requisitos
 COPY requirements.txt .
-# 3. O PULO DO GATO (Versão Blindada):
-# Usamos \\\$ para o shell do host não tentar resolver a variável antes da hora.
-# Adicionamos 'file://' para o PIP não ignorar os diretórios.
-RUN --mount=type=bind,source=pip_cache,target=/app/pip_cache \
-    export FIND_LINKS=$(find /app/pip_cache -name "*.whl" -printf "%h\n" | sort -u | tr '\n' ' ') && \
-    pip install --no-index --find-links="$FIND_LINKS" -r requirements.txt || \\
-    (echo "⚠️ Falha no modo offline, tentando fallback..." && pip install \$FIND_LINKS -r requirements.txt)
-# 4. Copia o restante
+# 5. Pesquisa o cache local mapeado no contexto atual
+RUN --mount=type=bind,source=./cache_app/bin_pip,target=/app/pip_cache \\
+    echo "=== 🔍 PESQUISANDO CACHE DO HOST ===" && \\
+    ls -R /app/pip_cache/ || true
+# 6. Instalação Inteligente: Tenta pacotes locais (.whl) com Fallback automático para Rede
+RUN --mount=type=bind,source=./cache_app/bin_pip,target=/app/pip_cache,rw \
+    pip install --no-index --find-links=/app/pip_cache -r requirements.txt || \
+    (echo "⚠️ Cache incompleto! Baixando da rede e alimentando seu backup local..." && \
+    pip download -d /app/pip_cache --default-timeout=1000 -r requirements.txt && \
+    pip install --no-index --find-links=/app/pip_cache -r requirements.txt)
+# 7. Copia o restante
 COPY . .
 CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
 EOF
+
 # 7.
-cat <<EOF > .dockerignore
+cat <<EOF > aiops/ollama/.dockerignore
+# ==============================================================================
+# 1. BLOQUEIOS CRÍTICOS DE ARQUIVOS PESADOS (Evita o envio de 66 GB para o Contexto)
+# ==============================================================================
+# Bloqueia as imagens docker salvas, bancos de dados e caches do apt
+cache_app/imgs_docker/
+cache_app/var_cache_apt_archives/
+cache_app/root_m2/
+# Bloqueia os pacotes extremamente pesados que você não vai usar no agente leve
+cache_app/bin_pip/tensorflow/
+cache_app/bin_pip/DEEP_LEARNING/
+# Bloqueia os modelos locais do Ollama e caches de IA
 ollama_data/
+cache_app/ollama_data/
+hf_cache/
+# ==============================================================================
+# 2. DIRETÓRIOS DE APLICAÇÃO / DADOS LOCAIS
+# ==============================================================================
 vector_db/
 brain/
+
+# ==============================================================================
+# 3. ARQUIVOS TEMPORÁRIOS, LOGS E CONFIGURAÇÕES DE AMBIENTE
+# ==============================================================================
 *.tar
+*.log
+.git/
+.env
 EOF
 
 # 8. GERANDO O DOCKER-COMPOSE OTIMIZADO PARA AMD RX 580
@@ -633,16 +661,16 @@ services:
       - "11434:11434"
     volumes:
       - /home/userlnx/docker/ollama_data:/root/.ollama
-    deploy:
-      resources:
-        limits:
-          cpus: '6.0'        # Preserva 6 threads para o sistema operacional
-          memory: 8G
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    #deploy:
+    #  resources:
+    #    limits:
+    #      cpus: '6.0'        # Preserva 6 threads para o sistema operacional
+    #      memory: 8G
+    #    reservations:
+    #      devices:
+    #        - driver: nvidia
+    #          count: 1
+    #          capabilities: [gpu]
 
   ai-agent:
     image: ollama-ai-agent:v1.0-gold
@@ -677,7 +705,6 @@ EOF
 
 # 10. GERANDO O DOCKER-COMPOSE OTIMIZADO (VERSÃO CPU-STABLE)
 cat <<EOF > aiops/ollama/docker-compose_cpu.yml
-version: '3'
 services:
   ollama-server:
     image: ollama/ollama:0.17.4
@@ -689,22 +716,21 @@ services:
       - /home/userlnx/docker/ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_LLM_LIBRARY=cpu    # FORÇA o modo CPU logo na largada
+      - OLLAMA_LLM_LIBRARY=cpu
       - OLLAMA_NUM_PARALLEL=1
     deploy:
       resources:
         limits:
-          cpus: '6.0'        # Limita a 50% do seu Xeon (6 de 12 threads)
-          memory: 8G         # Limita a 8GB de RAM
+          cpus: '6.0'
+          memory: 8G
 
   ai-agent:
-      build:
+    build:
       context: .
       dockerfile: Dockerfile.ai
     image: ollama-ai-agent:v1.0-gold
     container_name: ai-agent
     pull_policy: never
-    # IMPORTANTE: O Dashboard.py está dentro de aiops/ollama/
     working_dir: /app/aiops/ollama
     environment:
       - OLLAMA_HOST=ollama-server
@@ -715,12 +741,11 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      # Mapeia a raiz do projeto para o /app do container
       - /home/userlnx/docker/script_docker/card-system-api:/app
     deploy:
       resources:
         limits:
-          cpus: '2.0'        # O agente de IA não precisa de muito
+          cpus: '2.0'
           memory: 4G
 EOF
 
@@ -810,7 +835,6 @@ EOF
 # Este é o seu "orquestrador". Ele vai baixar as imagens Docker, montar os discos e clonar o projeto
 cat <<'EOF' > aiops/ollama/setup_ia.sh
 #!/bin/bash
-mkdir -p pip_cache
 echo "🚀 Iniciando Preparação do Ambiente SRE Córtex no Debian..."
 # 1. Construir a imagem obrigatoriamente (o --build garante que o pysqlite3 seja instalado)
 echo "📦 Construindo imagem do Agente (Garante a instalação das dependências)..."
@@ -1199,7 +1223,7 @@ chmod +x aiops/ollama/enable_auto_fans.sh
 # winpty wsl.exe -d Debian_FBI -u userlnx
 # ip a | grep inet
 # cd "/mnt/y/Virtual Machines/card-system-api"
-
+#ZOTAC GTX 760 Perak Graphics Processor GK104 Cores 1152 TMUs 96 ROPs 32  Memory Size 2 GB Memory Type GDDR5 Bus Width 256 bit
 # root@pc-linux:/home/userlnx/docker/script_docker/card-system-api/aiops/ollama# docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 #Thu Apr 30 18:28:24 2026
 #+-----------------------------------------------------------------------------+
@@ -1237,7 +1261,9 @@ chmod +x aiops/ollama/enable_auto_fans.sh
 #Córtex, O sistema usa Docker e Python?, Qual a stack?
 #Quais os capítulos lidos no terceiro dia de leitura ?
 #docker exec -it ai-agent pip install streamlit-autorefresh
+#docker exec -it ai-agent pip install ollama
 #docker commit ai-agent ollama-ai-agent:v1.0-gold
+#docker exec -it ollama-server ollama list  
 #FIND_LINKS=$(find ./cache_app/bin_pip -name "*.whl" -printf "--find-links=%h " | sort -u) && \
 #pip install --break-system-packages --no-index $FIND_LINKS -r requirements.txt
 #docker exec -it ollama-server ollama run qwen2:0.5b
@@ -1245,3 +1271,20 @@ chmod +x aiops/ollama/enable_auto_fans.sh
 #DISPLAY=:1 nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=85"
 #sudo apt update && sudo apt install -y lm-sensors
 #sudo sensors-detect --auto
+#ls -hl -R cache_app/bin_pip/ | grep -iE 'requests|streamlit|pandas|psutil|prometheus|langchain|chromadb|sentence|pysqlite|ollama'
+#docker run --rm -v /home/userlnx/docker/script_docker/card-system-api/aiops/ollama/cache_app/var_cache_apt_archives:/backup debian:trixie-slim cp -r /var/cache/apt/archives/. /backup/
+#docker run --rm -v /home/userlnx/docker/script_docker/card-system-api/aiops/ollama:/workspace python:3.11-slim bash -c "pip download -d /workspace/cache_app/bin_pip/teste_downloads -r /workspace/requirements.txt"
+#docker run --rm -v /home/userlnx/docker/script_docker/card-system-api/aiops/ollama:/workspace python:3.11-slim bash -c "pip download --timeout 120 -d /workspace/cache_app/bin_pip cuda_toolkit nvidia-cudnn-cu13 nvidia-cusparselt-cu13"
+
+## 1. Entra na pasta do cache
+# cd /home/userlnx/docker/script_docker/card-system-api/aiops/ollama/cache_app/bin_pip/
+# 2. Procura absolutamente todos os arquivos .whl escondidos nas subpastas e joga eles para a raiz
+# find . -mindepth 2 -name "*.whl" -exec mv {} . \;
+# find aiops/ollama/cache_app/bin_pip/ -iname "*cu*" -ls
+# find /home/userlnx/docker/script_docker/card-system-api/aiops/ollama/cache_app/var_cache_apt_archives/DRIVERS_NVIDIA/ -iname "*" -type f -ls
+# ls -F /home/userlnx/docker/script_docker/card-system-api/aiops/ollama/cache_app/var_cache_apt_archives/DRIVERS_NVIDIA/
+# 
+#  du -h --max-depth=1 | sort -rh
+#  find -type f -regextype posix-extended -iregex '.*(tensorflow|tf-keras|keras|tensorboard|tensorboard-data-server|h5py|astunparse|gast|google-pasta|grpcio|libclang|ml-dtypes|flatbuffers|opt-einsum|protobuf|termcolor|wrapt|absl-py|tensorflow-estimator|tensorflow-io-gcs-filesystem|dm-tree|tf-estimator-nightly).*' -exec mv -v {} . \;
+
+#docker build -t ollama-ai-agent:v1.0-gold -f Dockerfile.ai .

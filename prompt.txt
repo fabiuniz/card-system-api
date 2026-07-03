@@ -1,7 +1,7 @@
 1) Tenho esse projeto e queria continuar, o que você precisa para ter contexto para me ajudar ?
     Já posso adiantar que esses arquivos: 
 
-Spec-Driven / Skills Agent
+Spec-Driven / Skills Agent / Guardrails / Markdown-drive
 [Script Principal] (Orquestrador) setup_project.sh [driven]
  ├── ⚙️ Verificar ferramentas do Host (Função interna)
  ├── 📂 Criação da Estrutura de Pastas (Hexagonal, Infra, Monitoramento, IAs, IoT)

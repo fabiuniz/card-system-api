@@ -20,3 +20,4 @@ build_app() {
     fi
 }
 build_app "cardsystem" "CardSystem"
+build_app "techtaste" "TechTaste"

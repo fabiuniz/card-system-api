@@ -3,99 +3,118 @@
 set -e
 
 echo "=========================================================="
-echo "===             INICIANDO BUILD DO APK                 ==="
+echo "===                 INICIANDO BUILD DO APK                ==="
 echo "=========================================================="
 
-# 0. CONFIGURAÇÃO AUTOMÁTICA DE AMBIENTE (Facilitando sua vida)
-export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
+# === [AUTO-INSTALAÇÃO DO JAVA 17] ===
+echo "[+] Verificando se o OpenJDK 17 está disponível no sistema..."
+if [ ! -d "/usr/lib/jvm/java-17-openjdk-amd64" ]; then
+    echo "[-] Java 17 não encontrado! Iniciando instalação automática..."
+    # Atualiza a lista de pacotes e instala o JDK 17 sem pedir confirmação visual
+    apt-get update && apt-get install -y openjdk-17-jdk
+    echo "[+] Java 17 instalado com sucesso!"
+else
+    echo "[+] Java 17 já está instalado e pronto para uso."
+fi
+
+# 0. CONFIGURAÇÃO AUTOMÁTICA DE AMBIENTE (Alinhado com o padrão estável Java 17)
+export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
 export ANDROID_HOME="/home/userlnx/Android/Sdk"
 export FLUTTER_HOME="/home/userlnx/development/flutter"
 export PATH="$FLUTTER_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH"
 
-# 1. Limpeza preventiva de processos travados
-echo "[1/7] Matando processos antigos do Gradle/Java..."
-pkill -f gradle || true
-pkill -f java || true
+# CORREÇÃO CRÍTICA ULTRA: Procura e destrói "path/to/jdk" em TODO o projeto e no Gradle global
+echo "[+] Caçando e eliminando referências a 'path/to/jdk'..."
 
-# 1.5. AUTO-INSTALAÇÃO DO NDK (se o zip estiver no local do script)
-echo "[1.5/7] Verificando se há pacotes NDK para instalar..."
-NDK_ZIP="android-ndk-r28b-linux.zip"
-# Atualizado para a versão exata exigida pelo seu Gradle moderno
-NDK_TARGET_DIR="$ANDROID_HOME/ndk/28.2.13676358"
-
-if [ -f "$NDK_ZIP" ]; then
-    if [ ! -d "$NDK_TARGET_DIR" ] || [ ! -f "$NDK_TARGET_DIR/source.properties" ]; then
-        echo "[+] Detectado $NDK_ZIP. Removendo resíduos e instalando NDK r28b..."
-        rm -rf "$NDK_TARGET_DIR"
-        mkdir -p "$ANDROID_HOME/ndk"
-        
-        # Descompacta o zip temporariamente
-        unzip -q "$NDK_ZIP" -d "$ANDROID_HOME/ndk/"
-        
-        # Renomeia a pasta extraída para a versão exata que o Gradle quer
-        mv "$ANDROID_HOME/ndk/android-ndk-r28b" "$NDK_TARGET_DIR"
-        
-        # Ajusta as permissões de execução do NDK recém-instalado
-        chown -R userlnx:userlnx "$ANDROID_HOME/ndk" || true
-        chmod -R +x "$NDK_TARGET_DIR/toolchains" || true
-        echo "[+] NDK r28b instalado e configurado com sucesso em: $NDK_TARGET_DIR"
-    else
-        echo "[+] NDK r28b já está instalado corretamente."
-    fi
+# 1. Corrige no gradle.properties local do projeto (Apontando para Java 17)
+if [ -f "android/gradle.properties" ]; then
+    sed -i 's|org.gradle.java.home=.*|org.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64|g' android/gradle.properties
+    sed -i '/path\/to\/jdk/d' android/gradle.properties
 fi
 
-# 2. Garantir a estrutura correta do Gradle 9.1.0 localmente
-GRADLE_VERSION="9.1.0"
-GRADLE_DIST="all"
-GRADLE_DIR="/home/userlnx/.gradle/wrapper/dists/gradle-${GRADLE_VERSION}-${GRADLE_DIST}"
-HASH_DIR="7wzd0jkjit61aq2p43wpjgij9" 
-TARGET_PATH="${GRADLE_DIR}/${HASH_DIR}"
-
-echo "[2/7] Verificando integridade local do Gradle ${GRADLE_VERSION}..."
-if [ ! -f "${TARGET_PATH}/gradle-${GRADLE_VERSION}-${GRADLE_DIST}.zip.ok" ] || [ ! -f "${TARGET_PATH}/gradle-${GRADLE_VERSION}-${GRADLE_DIST}.zip" ]; then
-    echo "[-] Gradle ${GRADLE_VERSION} não encontrado ou incompleto."
-    echo "[+] Baixando manualmente com barra de progresso para evitar travamento..."
-    mkdir -p "${TARGET_PATH}"
-    
-    curl -L --progress-bar -o "${TARGET_PATH}/gradle-${GRADLE_VERSION}-${GRADLE_DIST}.zip" \
-        "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-${GRADLE_DIST}.zip"
-    
-    touch "${TARGET_PATH}/gradle-${GRADLE_VERSION}-${GRADLE_DIST}.zip.ok"
-    echo "[+] Download do Gradle concluído com sucesso!"
-else
-    echo "[+] Gradle ${GRADLE_VERSION}-${GRADLE_DIST} já está pronto e validado localmente."
+# 2. Corrige no gradle.properties GLOBAL do usuário do Linux
+if [ -f "/home/userlnx/.gradle/gradle.properties" ]; then
+    echo "[+] Limpando gradle.properties global em ~/.gradle/..."
+    sed -i 's|org.gradle.java.home=.*|org.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64|g' /home/userlnx/.gradle/gradle.properties
+    sed -i '/path\/to\/jdk/d' /home/userlnx/.gradle/gradle.properties
 fi
 
 # 3. Preparação do ambiente Flutter
-echo "[3/7] Preparando o projeto Flutter..."
+echo "[3/5] Preparando o projeto Flutter..."
 flutter create . --platforms=android
 flutter clean
 flutter pub get
 
-# 4. Compilação do APK
-echo "[4/7] Iniciando compilação do APK Release..."
-flutter build apk --release
+# ==========================================================
+# 🔥 CRÍTICO: MUDANÇA DE ORDEM E TRAVA ANTI-SOBREESCRITA
+# ==========================================================
+
+# 1. Primeiro rodamos um pré-build falso ou inicialização para o Flutter gerar/atualizar o que quiser
+echo "[+] Inicializando arquivos base do Gradle..."
+flutter build apk --config-only 2>/dev/null || true
+
+# 2. AGORA SIM injetamos as travas nos arquivos (O Flutter não vai mais sobrescrevê-los)
+echo "[+] Injetando variáveis compatíveis no local.properties..."
+if [ -f "android/local.properties" ]; then
+    sed -i '/flutter.minSdkVersion/d' android/local.properties
+    sed -i '/flutter.targetSdkVersion/d' android/local.properties
+    sed -i '/flutter.compileSdkVersion/d' android/local.properties
+fi
+echo "flutter.minSdkVersion=21" >> android/local.properties
+echo "flutter.targetSdkVersion=34" >> android/local.properties
+echo "flutter.compileSdkVersion=34" >> android/local.properties
+
+if [ -f "android/app/build.gradle.kts" ]; then
+    echo "[+] Ajustando build.gradle.kts para garantir API 34 estável..."
+    sed -i 's/compileSdk = .*/compileSdk = 34/g' android/app/build.gradle.kts
+    sed -i 's/minSdk = .*/minSdk = 21/g' android/app/build.gradle.kts
+    sed -i 's/targetSdk = .*/targetSdk = 34/g' android/app/build.gradle.kts
+    
+    # Remove qualquer menção antiga ao buildToolsVersion para não duplicar
+    sed -i '/buildToolsVersion/d' android/app/build.gradle.kts
+    
+    # Injeta a versão exata 34.0.0 logo abaixo de compileSdk = 34
+    sed -i '/compileSdk = 34/a \    buildToolsVersion = "34.0.0"' android/app/build.gradle.kts
+fi
+
+if [ -f "android/gradle.properties" ]; then
+    sed -i 's|org.gradle.java.home=.*|org.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64|g' android/gradle.properties
+fi
+
+# 4. Compilação do APK Release Real
+echo "[4/5] Iniciando compilação do APK Release..."
+export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+
+# Usamos a flag '--no-version-check' para mitigar ganchos automáticos de upgrade de SDK
+flutter build apk --release --target-platform android-arm --no-pub --no-version-check
 
 # 5. Verificação do APK gerado
-APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
-find . -type f -name "*.apk"
-echo "[5/7] Verificando arquivos gerados..."
-if [ -f "$APK_PATH" ]; then
+APK_ARM_PATH="build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
+APK_GENERIC_PATH="build/app/outputs/flutter-apk/app-release.apk"
+APK_PATH=""
+
+echo "[5/5] Verificando arquivos gerados..."
+if [ -f "$APK_ARM_PATH" ]; then
+    APK_PATH="$APK_ARM_PATH"
+elif [ -f "$APK_GENERIC_PATH" ]; then
+    APK_PATH="$APK_GENERIC_PATH"
+fi
+
+if [ -n "$APK_PATH" ]; then
     echo "=========================================================="
     echo "===          COMPILAÇÃO CONCLUÍDA COM SUCESSO!         ==="
-    echo "Seu APK gerado está em: $APK_PATH"
+    echo "Seu APK otimizado está em: $APK_PATH"
     echo "=========================================================="
     
-    # 6. Upload opcional via FTP
-    if [ -f "upload_apk.py" ]; then
-        echo "[6/7] === Conectando ao FTP para Upload ==="
-        python3 upload_apk.py upload_cfg.json "cfg_a"
+    if [ -f "upload_apk.py" ] && [ -f "upload_cfg.json" ]; then
+        echo "[6/6] === Conectando ao FTP para Upload ==="
+        python3 upload_apk.py upload_cfg.json "cfg_a" "$APK_PATH"
     else
-        echo "[6/7] Script upload_apk.py não encontrado. Pulando upload."
+        echo "[6/6] Scripts de upload não encontrados. Pulando upload."
     fi
 else
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    echo "[-] ERRO CRÍTICO: O processo terminou, mas o APK não foi encontrado."
+    echo "[-] ERRO CRÍTICO: Nenhum APK foi encontrado nas pastas de output."
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     exit 1
 fi
@@ -132,3 +151,9 @@ fi
 #       ├─► Baixa dependências e bibliotecas do Android
 #       ├─► Usa o Android SDK (ferramentas para empacotar o app)
 #       └─► Usa o NDK (ferramentas para compilar as partes C/C++ do Flutter)
+#       
+#       ao abrir o apk no dispositivo galaxy L2 prime SM-G532MT da "Ocorreu um problema ao analisar o pacote"
+#       
+#       /home/userlnx/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --list_installed
+#       /home/userlnx/Android/Sdk/cmdline-tools/latest/bin/sdkmanager "build-tools;36.0.0" #ou "34.0.0"
+

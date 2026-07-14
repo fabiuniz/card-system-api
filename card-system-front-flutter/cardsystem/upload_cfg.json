@@ -6,7 +6,7 @@
     "FTP_PORT": "2121",
     "REMOTE_APK_NAME": "wordquiz-debug-flutter.apk",
     "SDCARD_DIR": "/Download",
-    "LOCAL_APK_PATH" :"./build/app/outputs/apk/release/app-release.apk"
+    "LOCAL_APK_PATH" :"build/app/outputs/flutter-apk/app-release.apk"
     
   },
   "cfg_b": {

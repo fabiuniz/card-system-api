@@ -18,12 +18,13 @@ def carregar_configuracao():
     """Lê o arquivo config.json e filtra pelo bloco escolhido no terminal"""
     if len(sys.argv) < 3:
         print("[-] Erro de uso!")
-        print("    Modo correto: python enviar_ftp.py <arquivo.json> <nome_da_config>")
-        print("    Exemplo:      python enviar_ftp.py config.json 'cfg a'")
+        print("    Modo correto: python enviar_ftp.py <arquivo.json> <nome_da_config> <path_apk>")
+        print("    Exemplo:      python enviar_ftp.py config.json 'cfg a' '/file.apk'")
         sys.exit(1)
 
     json_path = sys.argv[1]
     config_escolhida = sys.argv[2]
+    path_apk = sys.argv[3]
 
     if not os.path.exists(json_path):
         print(f"[-] Erro: Arquivo {json_path} não encontrado.")
@@ -49,8 +50,13 @@ def carregar_configuracao():
 def enviar_apk():
     # Carrega o bloco do cliente selecionado
     cfg = carregar_configuracao()
-
-    local_path = cfg["LOCAL_APK_PATH"]
+    if len(sys.argv) >= 4 and sys.argv[3].strip() != "":
+        local_path = sys.argv[3]
+        print(f"[+] Usando o APK do parâmetro: {local_path}")
+    else:
+        local_path = cfg["LOCAL_APK_PATH"]
+        print(f"[+] Usando o APK padrão da configuração: {local_path}")
+    
     remote_name = cfg["REMOTE_APK_NAME"]
     pasta_destino = cfg["SDCARD_DIR"]
 

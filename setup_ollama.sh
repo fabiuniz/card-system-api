@@ -760,6 +760,7 @@ echo "2. Gerenciar Modelos (Recomendado: phi3:mini)"
 echo " - 1 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3'"
 echo " - 2 Baixe o modelo: 'docker exec -it ollama-server ollama run phi3:mini'"
 echo " - 3 Baixe o modelo: 'docker exec -it ollama-server ollama run llama3:8b-instruct-q4_0'"
+echo " - 4 Baixe o modelo: 'docker exec -it ollama-server ollama run qwen2.5-coder:1.5b'"
 echo "3. Popular Conhecimento (RAG)"
 echo ' - 1 Exe: ./aiops/ollama/add_knowledge.sh "$(cat README.md)"'
 echo ' - 2 Limpar Cérebro: ./aiops/ollama/clear_knowledge.sh'

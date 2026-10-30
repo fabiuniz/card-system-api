@@ -106,9 +106,9 @@ if [ -n "$APK_PATH" ]; then
     echo "Seu APK otimizado está em: $APK_PATH"
     echo "=========================================================="
     
-    if [ -f "upload_apk.py" ] && [ -f "upload_cfg.json" ]; then
+    if [ -f "../upload_apk.py" ] && [ -f "../upload_cfg.json" ]; then
         echo "[6/6] === Conectando ao FTP para Upload ==="
-        python3 upload_apk.py upload_cfg.json "cfg_a" "$APK_PATH"
+        python3 ../upload_apk.py ../upload_cfg.json "cfg_a" "$APK_PATH"
     else
         echo "[6/6] Scripts de upload não encontrados. Pulando upload."
     fi

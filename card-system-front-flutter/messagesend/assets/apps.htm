@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Web Server Funcionando</title>
+<title>Painel de Aplicações</title>
 <style>
   body {
     margin: 0;
@@ -24,18 +24,44 @@
   h1 { color: #16a34a; font-size: 1.5rem; margin: 0 0 8px 0; }
   p  { margin: 6px 0; font-size: 0.95rem; }
   code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; }
+  ul { list-style: none; margin: 16px 0 0 0; padding: 0; }
+  li { margin: 8px 0; }
+  li a {
+    display: block;
+    padding: 12px;
+    text-decoration: none;
+    color: #1e293b;
+    background: #f4f7f9;
+    border-radius: 8px;
+    border-left: 4px solid #16a34a;
+    font-weight: bold;
+    text-align: left;
+  }
+  li a:active { background: #e2e8f0; }
+  li a small { display: block; font-weight: normal; color: #64748b; font-size: 0.8rem; }
 </style>
 </head>
 <body>
   <div class="box">
-    <h1>✅ Web server funcionando!</h1>
-    <p>Esta página foi carregada de <code>assets/apps.htm</code>.</p>
-    <p id="origem"></p>
-    <p id="hora"></p>
+    <h1>📋 Aplicações</h1>
+    <p>Escolha uma aplicação para abrir.</p>
+    <ul id="lista"></ul>
+    <p style="margin-top:16px;font-size:0.8rem;color:#64748b;">
+      Carregado de <code>assets/apps.htm</code>
+    </p>
   </div>
 <script>
-  document.getElementById('origem').textContent = 'URL: ' + location.href;
-  document.getElementById('hora').textContent = 'Carregada em: ' + new Date().toLocaleString();
+  // Para adicionar uma aplicação, inclua uma linha aqui.
+  var APPS = [
+    { emoji: '🩸', nome: 'Sua primeira aplicação aqui',    desc: 'Descrição da sua aplicação aqui',  url: 'dextro/frontend/glisemia.html' },    
+  ];
+  var html = '';
+  for (var i = 0; i < APPS.length; i++) {
+    var a = APPS[i];
+    html += '<li><a href="' + a.url + '">' + a.emoji + ' ' + a.nome +
+            '<small>' + a.desc + '</small></a></li>';
+  }
+  document.getElementById('lista').innerHTML = html;
 </script>
 </body>
 </html>

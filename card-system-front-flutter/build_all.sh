@@ -17,6 +17,18 @@ up_file(){
     fi
 }
 
+gen_assets() {
+    local PUB="pubspec.yaml"
+    local LIST
+    LIST=$(find assets -type d | sort | sed 's|^|    - |; s|$|/|')
+    # remove o bloco antigo e insere o novo entre os marcadores
+    awk -v list="$LIST" '
+        /# ASSETS-BEGIN/ { print; print list; skip=1; next }
+        /# ASSETS-END/   { skip=0 }
+        !skip { print }
+    ' "$PUB" > "$PUB.tmp" && mv "$PUB.tmp" "$PUB"
+}
+
 build_app() {
     local FOLDER=$1
     local APK_NAME=$2
@@ -24,7 +36,9 @@ build_app() {
     local APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
     
     echo "🏗️ Compilando $FOLDER..."
+    rm -f "$DIST_DIR/$APK_NAME.apk"
     if cd "$ROOT_DIR/$FOLDER"; then
+        gen_assets
         flutter clean
         flutter pub get
         flutter create . --platforms=android
@@ -50,9 +64,9 @@ build_app() {
 
 #ao abrir o apk no dispositivo galaxy L2 prime SM-G532MT da "Ocorreu um problema ao analisar o pacote"
 
-build_app "cardsystem" "CardSystem" "cfg_a"
-build_app "techtaste" "TechTaste" "cfg_b"
-build_app "tvcastapp" "TvCastApp" "cfg_c"
+#build_app "cardsystem" "CardSystem" "cfg_a"
+#build_app "techtaste" "TechTaste" "cfg_b"
+#build_app "tvcastapp" "TvCastApp" "cfg_c"
 build_app "messagesend" "MessageSend" "cfg_d"
 
 #MessageSend

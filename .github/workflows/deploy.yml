@@ -32,6 +32,10 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      - name: Enable Google Cloud APIs
+        run: |
+          gcloud services enable artifactregistry.googleapis.com
+
       - name: 'Set up Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@v2'
 

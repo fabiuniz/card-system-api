@@ -1,11 +1,54 @@
 #!/bin/bash
 #setup_front_flutter.sh
+
 # Configurações iniciais
 BASE_FOLDER="card-system-front-flutter"
 rm -rf $BASE_FOLDER
 mkdir -p $BASE_FOLDER
 cd $BASE_FOLDER
 ROOT_DIR=$(pwd)
+
+
+# 1. Atualizar o sistema e instalar dependências básicas
+apt-get update && apt-get install -y \
+    curl \
+    git \
+    unzip \
+    xz-utils \
+    zip \
+    libglu1-mesa \
+    libpulse0 \
+    libxi6 \
+    libgconf-2-4 \
+    gdebi-core
+
+# 2. Baixar e descompactar o Flutter SDK (versão estável mais recente)
+cd /opt
+# Verifica se o Flutter já está instalado em /opt/flutter
+if [ ! -d "/opt/flutter" ]; then
+    echo "[+] Flutter não encontrado. Baixando o Flutter SDK..."
+    cd /opt
+    git clone https://github.com/flutter/flutter.git -b stable
+else
+    echo "[+] Flutter já está instalado em /opt/flutter. Atualizando (opcional)..."
+    # Opcional: git -C /opt/flutter pull
+fi
+
+# Garante que o PATH está configurado na sessão atual
+export PATH="$PATH:/opt/flutter/bin"
+
+# 3. Configurar o Flutter no PATH permanentemente para o root
+echo 'export PATH="$PATH:/opt/flutter/bin"' >> /root/.bashrc
+source /root/.bashrc
+
+# 4. Configurar dependências do Android (necessário para 'flutter create' e 'flutter build apk')
+# O Flutter baixará automaticamente as ferramentas de linha de comando do Android necessárias se aceitarmos as licenças
+flutter precache
+flutter config --no-analytics
+flutter doctor --android-licenses
+# Pressione 'y' (yes) para aceitar todas as licenças do Android SDK solicitadas.
+
+flutter doctor
 
 echo "🏗️ Criando estrutura Monorepo (Versão Santander Transações - FIX)..."
 

@@ -238,5 +238,5 @@ echo -e "⚛️ React Frontend: ${BLUE_UNDERLINE}http://${PROJETO_CONF[HOST_NAME
 echo -e "⚙️ Actuator: ${RED_UNDERLINE}curl http://${PROJETO_CONF[HOST_NAME]}:8080/actuator/prometheus${NC}"
 echo -e "🐍 Python: ${RED_UNDERLINE}python3 scripts/aiops_health_agent.py${NC}"
 echo "--------------------------"
-
+echo -e "\n--- 🚀 RODE NO BASH LOCAL: ---"
 echo 'start chrome --incognito "https://gemini.google.com/" "http://'${PROJETO_CONF[HOST_NAME]}':8081" "http://'${PROJETO_CONF[HOST_NAME]}':3000" "http://'${PROJETO_CONF[HOST_NAME]}':9090/targets" "http://'${PROJETO_CONF[HOST_NAME]}':8080/swagger-ui/index.html" "http://'${PROJETO_CONF[HOST_NAME]}':4000" "http://'${PROJETO_CONF[HOST_NAME]}':4200" "http://'${PROJETO_CONF[HOST_NAME]}':4300" "http://'${PROJETO_CONF[HOST_NAME]}':8082" "http://'${PROJETO_CONF[HOST_NAME]}':8083" "http://'${PROJETO_CONF[HOST_NAME]}':8084" "http://'${PROJETO_CONF[HOST_NAME]}':8501"'

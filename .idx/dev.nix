@@ -1,47 +1,62 @@
 # To learn more about how to use Nix to configure your environment
-# see: https://developers.google.com/idx/guides/customize-idx-env
+# see: https://firebase.google.com/docs/studio/customize-workspace
 { pkgs, ... }: {
-  # Canal de pacotes estável
-  channel = "stable-23.11"; 
-
-  # 1. FERRAMENTAS DO ESPECIALISTA AIOPS
+  # Which nixpkgs channel to use.
+  channel = "stable-24.05"; # or "unstable"
+  # Use https://search.nixos.org/packages to find packages
   packages = [
-    pkgs.zulu17                   # Java 17 para Spring Boot 3+
-    pkgs.maven
+    pkgs.jdk17
+    pkgs.unzip
     pkgs.python3
-    pkgs.python3Packages.pip
-    pkgs.python3Packages.requests # Resolve o erro do Agente Python
-    pkgs.docker                   # Binário do Docker
-    pkgs.docker-compose           # Orquestrador para Prometheus/Grafana
-    pkgs.jq
   ];
-
-  # 2. HABILITAÇÃO DO DAEMON DOCKER (O que faltava!)
-  services.docker.enable = true;
-
   # Sets environment variables in the workspace
   env = {};
-
   idx = {
-    # Extensões recomendadas
+    # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
-      "vscjava.vscode-java-pack"
-      "ms-python.python"
+      "Dart-Code.flutter"
+      "Dart-Code.dart-code"
     ];
-
     workspace = {
-      # Instala dependências na primeira vez
+      # Runs when a workspace is first created with this `dev.nix` file
       onCreate = {
-        # install = "mvn clean install -DskipTests";
-      };
+        build-flutter = ''
+          cd /home/user/myapp/android
 
-      # Inicia os serviços toda vez que o workspace abre
-      onStart = {
-        # Sobe o Prometheus e Grafana automaticamente
-        # start-monitoring = "cd card-system-api/monitoring && docker-compose up -d";
-        
-        # Inicia a API na porta 8080 (padrão para evitar conflitos no Swagger)
-        # run-server = "cd card-system-api && mvn spring-boot:run";
+          ./gradlew \
+            --parallel \
+            -Pverbose=true \
+            -Ptarget-platfform=android-x86 \
+            -Ptarget=/home/user/myapp/lib/main.dart \
+            -Pbase-application-name=android.app.Application \
+            -Pdart-defines=RkxVVFRFUl9XRUJfQ0FOVkFTS0lUX1VSTD1odHRwczovL3d3dy5nc3RhdGljLmNvbS9mbHV0dGVyLWNhbnZhc2tpdC85NzU1MDkwN2I3MGY0ZjNiMzI4YjZjMTYwMGRmMjFmYWMxYTE4ODlhLw== \
+            -Pdart-obfuscation=false \
+            -Ptrack-widget-creation=true \
+            -Ptree-shake-icons=false \
+            -Pfilesystem-scheme=org-dartlang-root \
+            assembleDebug
+
+          # TODO: Execute web build in debug mode.
+          # flutter run does this transparently either way
+          # https://github.com/flutter/flutter/issues/96283#issuecomment-1144750411
+          # flutter build web --profile --dart-define=Dart2jsOptimization=O0
+        '';
+      };
+      
+      # To run something each time the workspace is (re)started, use the `onStart` hook
+    };
+    # Enable previews and customize configuration
+    previews = {
+      enable = true;
+      previews = {
+        web = {
+          command = ["flutter" "run" "--machine" "-d" "web-server" "--web-hostname" "0.0.0.0" "--web-port" "$PORT"];
+          manager = "flutter";
+        };
+        android = {
+          command = ["flutter" "run" "--machine" "-d" "android" "-d" "localhost:5555"];
+          manager = "flutter";
+        };
       };
     };
   };

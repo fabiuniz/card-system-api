@@ -4,6 +4,11 @@ on:
   push:
     branches: [ "IaC" ]
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Motivo da execução manual (opcional)'
+        required: false
+        default: 'Execução manual'
 
 env:
   PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}

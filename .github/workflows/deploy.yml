@@ -34,7 +34,7 @@ jobs:
 
       - name: Enable Google Cloud APIs
         run: |
-          gcloud services enable artifactregistry.googleapis.com
+          gcloud services enable artifactregistry.googleapis.com run.googleapis.com
 
       - name: 'Set up Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@v2'
